@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Circuit Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap');
+:root{--bg:#080b0f;--sf:#0c1118;--sf2:#111820;--sf3:#161f2a;--bd:#1a2535;--bd2:#223044;--ac:#00e5ff;--acd:rgba(0,229,255,0.12);--ac2:#ff4d6d;--ac3:#39ff14;--ac4:#ffb800;--pu:#a855f7;--tx:#c8dce8;--txd:#3d5468;--txm:#6b8499;--vl:#39ff14;--inv:#ff4d6d;--wn:#ffb800;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--tx);font-family:'Syne',sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+header{display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:44px;background:var(--sf);border-bottom:1px solid var(--bd);flex-shrink:0;z-index:100;}
+.logo{font-family:'Space Mono',monospace;font-size:12px;color:var(--ac);letter-spacing:3px;display:flex;align-items:center;gap:8px;}
+.ldot{width:6px;height:6px;border-radius:50%;background:var(--ac3);box-shadow:0 0 10px var(--ac3);animation:blink 2.5s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.hc{display:flex;gap:5px;}
+.hb{background:var(--sf2);border:1px solid var(--bd);color:var(--txm);padding:4px 10px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all .15s;text-transform:uppercase;}
+.hb:hover{border-color:var(--ac);color:var(--ac);}
+.hb.active{border-color:var(--ac);color:var(--ac);background:var(--acd);}
+.hb.solve:hover{border-color:var(--ac3);color:var(--ac3);}
+.hb.clr:hover{border-color:var(--ac2);color:var(--ac2);}
+.spill{display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:9px;padding:4px 10px;border:1px solid var(--bd);background:var(--sf2);}
+.sdot{width:5px;height:5px;border-radius:50%;background:var(--txd);}
+.sdot.vl{background:var(--vl);box-shadow:0 0 7px var(--vl);}
+.sdot.inv{background:var(--inv);box-shadow:0 0 7px var(--inv);}
+.sdot.sol{background:var(--ac4);box-shadow:0 0 7px var(--ac4);animation:blink .5s infinite;}
+.main{display:flex;flex:1;overflow:hidden;}
+.lp{width:185px;background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;z-index:10;}
+.ps{padding:9px;border-bottom:1px solid var(--bd);}
+.st{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:2px;color:var(--txd);text-transform:uppercase;margin-bottom:7px;}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+.cb{background:var(--sf2);border:1px solid var(--bd);color:var(--txm);padding:7px 4px;cursor:pointer;transition:all .15s;font-family:'Syne',sans-serif;font-size:10px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.cb:hover,.cb.active{border-color:var(--ac);color:var(--ac);background:var(--acd);}
+.cb svg{width:30px;height:20px;}
+.mb{width:100%;background:var(--sf2);border:1px solid var(--bd);color:var(--txm);padding:6px 9px;cursor:pointer;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;margin-bottom:3px;text-align:left;display:flex;align-items:center;gap:6px;transition:all .15s;}
+.mb:hover{border-color:var(--ac2);color:var(--ac2);}
+.mb.active{border-color:var(--ac2);color:var(--ac2);background:rgba(255,77,109,0.06);}
+.ab{width:100%;background:transparent;border:1px solid var(--bd);color:var(--txm);padding:7px 9px;cursor:pointer;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;margin-bottom:3px;transition:all .2s;}
+.ab.p{border-color:var(--ac3);color:var(--ac3);}
+.ab.p:hover{background:rgba(57,255,20,.06);box-shadow:0 0 12px rgba(57,255,20,.12);}
+.ab:hover{border-color:var(--ac);color:var(--ac);}
+.ab.tv:hover{border-color:var(--pu);color:var(--pu);}
+.ab.no:hover{border-color:var(--ac4);color:var(--ac4);}
+.ab.dn:hover{border-color:var(--inv);color:var(--inv);}
+.cw{flex:1;position:relative;overflow:hidden;background:var(--bg);}
+#csv{width:100%;height:100%;background-image:radial-gradient(circle,#0d1929 1px,transparent 1px);background-size:20px 20px;}
+.rp{width:248px;background:var(--sf);border-left:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;}
+.rtbs{display:flex;border-bottom:1px solid var(--bd);flex-shrink:0;}
+.rt{flex:1;padding:9px 3px;text-align:center;font-family:'Space Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--txd);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;text-transform:uppercase;}
+.rt:hover{color:var(--txm);}
+.rt.active{color:var(--ac);border-bottom-color:var(--ac);}
+.rpn{flex:1;overflow-y:auto;padding:11px;display:none;}
+.rpn.active{display:block;}
+.ie{color:var(--txd);font-family:'Space Mono',monospace;font-size:9px;text-align:center;margin-top:28px;line-height:2.2;}
+.pr{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd);}
+.pl{font-family:'Space Mono',monospace;font-size:8px;color:var(--txd);letter-spacing:1px;}
+.pv{font-family:'Space Mono',monospace;font-size:10px;color:var(--ac);}
+.pi{background:var(--sf3);border:1px solid var(--bd2);color:var(--ac);padding:3px 7px;font-family:'Space Mono',monospace;font-size:10px;width:108px;text-align:right;}
+.pi:focus{outline:none;border-color:var(--ac);box-shadow:0 0 5px rgba(0,229,255,.18);}
+.rb{background:var(--sf2);border-left:2px solid var(--ac);padding:7px;margin-bottom:7px;}
+.rr{display:flex;justify-content:space-between;padding:3px 0;}
+.rl{font-family:'Space Mono',monospace;font-size:8px;color:var(--txd);}
+.rv{font-family:'Space Mono',monospace;font-size:10px;}
+.rv.v{color:var(--ac);}
+.rv.i{color:var(--ac2);}
+.rv.pw{color:var(--ac4);}
+.rv.g{color:var(--ac3);}
+.tnr{background:var(--sf2);border:1px solid var(--pu);padding:10px;margin-bottom:8px;}
+.tnt{font-family:'Space Mono',monospace;font-size:8px;color:var(--pu);letter-spacing:2px;margin-bottom:8px;}
+.tne{font-family:'Space Mono',monospace;font-size:12px;color:var(--tx);line-height:2.4;}
+.tne span{color:var(--ac4);}
+.vbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:9px;background:rgba(8,11,15,0.92);border:1px solid var(--bd);padding:5px 12px;font-family:'Space Mono',monospace;font-size:9px;pointer-events:none;letter-spacing:1px;z-index:50;white-space:nowrap;}
+.vbd{width:5px;height:5px;border-radius:50%;}
+#tooltip{position:fixed;background:rgba(8,11,15,0.97);border:1px solid var(--ac);padding:8px 11px;font-family:'Space Mono',monospace;font-size:9px;color:var(--ac);pointer-events:none;z-index:9999;max-width:200px;line-height:1.9;display:none;}
+#tooltip .ttn{font-size:11px;font-family:'Syne',sans-serif;font-weight:700;margin-bottom:3px;color:#fff;}
+#tooltip .ttk{color:var(--txd);}
+.sel-box{fill:rgba(0,229,255,0.03);stroke:var(--ac);stroke-width:1;stroke-dasharray:5,3;}
+::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:var(--sf);}::-webkit-scrollbar-thumb{background:var(--bd2);}
+@keyframes flow{from{stroke-dashoffset:40}to{stroke-dashoffset:0}}
+.cf{fill:none;stroke-width:2;stroke-dasharray:8 5;animation:flow .7s linear infinite;pointer-events:none;}
+.cf.fwd{stroke:var(--ac);}
+.cf.rev{stroke:var(--ac2);animation-direction:reverse;}
+.vg{fill:none;stroke:var(--ac4);stroke-width:4;stroke-opacity:0.1;pointer-events:none;}
+.comp-sel .cshell{filter:drop-shadow(0 0 7px var(--ac));}
+.wl{cursor:pointer;}
+.wl:hover{stroke:var(--ac) !important;stroke-width:3 !important;}
+.reqtag{display:inline-block;background:var(--sf3);border:1px solid var(--bd2);padding:3px 8px;font-family:'Space Mono',monospace;font-size:9px;color:var(--txm);margin:2px;cursor:pointer;transition:all .15s;}
+.reqtag:hover,.reqtag.sel{border-color:var(--ac);color:var(--ac);background:var(--acd);}
+.reqr{background:var(--sf2);border:1px solid var(--ac3);padding:9px;margin-top:9px;font-family:'Space Mono',monospace;font-size:11px;color:var(--ac3);line-height:2.2;}
+.wave-svg{background:var(--bg);border:1px solid var(--bd);display:block;}
+input[type=number]::-webkit-inner-spin-button{opacity:0.3;}
+.comp-error .cshell{filter:drop-shadow(0 0 8px var(--inv)) !important;}
+.comp-warn .cshell{filter:drop-shadow(0 0 8px var(--wn)) !important;}
+.comp-error .clbl,.comp-error .cvlbl{fill:var(--inv) !important;}
+.comp-warn .clbl,.comp-warn .cvlbl{fill:var(--wn) !important;}
+.kcl-badge{font-family:'Space Mono',monospace;font-size:8px;pointer-events:none;}
+.node-volt-lbl{font-family:'Space Mono',monospace;font-size:8px;pointer-events:none;fill:rgba(0,229,255,0.7);}
+
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><div class="ldot"></div>CIRCUIT·SIM</div>
+  <div class="hc">
+    <button class="hb active" id="bm-place" onclick="setMode('place')">◈ PLACE</button>
+    <button class="hb" id="bm-wire" onclick="setMode('wire')">⌇ WIRE</button>
+    <button class="hb" id="bm-select" onclick="setMode('select')">⊹ SELECT</button>
+    <button class="hb" id="bm-pan" onclick="setMode('pan')">✥ PAN</button>
+    <button class="hb" id="bm-delete" onclick="setMode('delete')">✕ DELETE</button>
+    <button class="hb" id="bm-region" onclick="setMode('region')">▣ REGION</button>
+    <button class="hb solve" onclick="solveCircuit()">⚡ SOLVE</button>
+    <button class="hb clr" onclick="clearAll()">⌫ CLEAR</button>
+  </div>
+  <div class="spill">
+    <div class="sdot" id="sdot"></div>
+    <span id="stxt" style="color:var(--txd)">IDLE</span>
+    <span style="color:var(--bd2)">|</span>
+    <span id="hel" style="color:var(--txm)">0 EL</span>
+    <span style="color:var(--bd2)">|</span>
+    <span id="hnd" style="color:var(--txm)">0 ND</span>
+  </div>
+</header>
+<div class="main">
+  <div class="lp">
+    <div class="ps">
+      <div class="st">Sources</div>
+      <div class="cg">
+        <button class="cb active" id="cbtn-vs" onclick="selComp('vs')">
+          <svg viewBox="0 0 30 20"><circle cx="15" cy="10" r="8" fill="none" stroke="#00e5ff" stroke-width="1.5"/><text x="15" y="14" text-anchor="middle" fill="#00e5ff" font-size="10" font-family="Space Mono">+</text></svg>V·DC
+        </button>
+        <button class="cb" id="cbtn-vac" onclick="selComp('vac')">
+          <svg viewBox="0 0 30 20"><circle cx="15" cy="10" r="8" fill="none" stroke="#a855f7" stroke-width="1.5"/><path d="M8 10 Q11 4 15 10 Q19 16 22 10" fill="none" stroke="#a855f7" stroke-width="1.5"/></svg>V·AC
+        </button>
+        <button class="cb" id="cbtn-is" onclick="selComp('is')">
+          <svg viewBox="0 0 30 20"><circle cx="15" cy="10" r="8" fill="none" stroke="#ff4d6d" stroke-width="1.5"/><polygon points="15,4 9,16 21,16" fill="none" stroke="#ff4d6d" stroke-width="1.3"/></svg>I·SRC
+        </button>
+        <button class="cb" id="cbtn-gnd" onclick="selComp('gnd')">
+          <svg viewBox="0 0 30 20"><line x1="15" y1="3" x2="15" y2="9" stroke="#3d5468" stroke-width="1.5"/><line x1="6" y1="9" x2="24" y2="9" stroke="#3d5468" stroke-width="2"/><line x1="9" y1="13" x2="21" y2="13" stroke="#3d5468" stroke-width="1.5"/><line x1="12" y1="17" x2="18" y2="17" stroke="#3d5468" stroke-width="1.5"/></svg>GND
+        </button>
+      </div>
+    </div>
+    <div class="ps">
+      <div class="st">Passives</div>
+      <div class="cg">
+        <button class="cb" id="cbtn-r" onclick="selComp('r')">
+          <svg viewBox="0 0 36 20"><line x1="0" y1="10" x2="5" y2="10" stroke="#c8dce8" stroke-width="1.5"/><rect x="5" y="4" width="26" height="12" fill="none" stroke="#c8dce8" stroke-width="1.5" rx="2"/><line x1="31" y1="10" x2="36" y2="10" stroke="#c8dce8" stroke-width="1.5"/></svg>RES
+        </button>
+        <button class="cb" id="cbtn-c" onclick="selComp('c')">
+          <svg viewBox="0 0 36 20"><line x1="0" y1="10" x2="14" y2="10" stroke="#5cc8ff" stroke-width="1.5"/><line x1="14" y1="3" x2="14" y2="17" stroke="#5cc8ff" stroke-width="2.5"/><line x1="20" y1="3" x2="20" y2="17" stroke="#5cc8ff" stroke-width="2.5"/><line x1="20" y1="10" x2="36" y2="10" stroke="#5cc8ff" stroke-width="1.5"/></svg>CAP
+        </button>
+        <button class="cb" id="cbtn-l" onclick="selComp('l')">
+          <svg viewBox="0 0 36 20"><line x1="0" y1="10" x2="4" y2="10" stroke="#a855f7" stroke-width="1.5"/><path d="M4 10 Q7 2 10 10 Q13 2 16 10 Q19 2 22 10 Q25 2 28 10" fill="none" stroke="#a855f7" stroke-width="1.5"/><line x1="28" y1="10" x2="36" y2="10" stroke="#a855f7" stroke-width="1.5"/></svg>IND
+        </button>
+        <button class="cb" id="cbtn-diode" onclick="selComp('diode')">
+          <svg viewBox="0 0 36 20"><line x1="0" y1="10" x2="10" y2="10" stroke="#ffb800" stroke-width="1.5"/><polygon points="10,3 10,17 26,10" fill="rgba(255,184,0,0.1)" stroke="#ffb800" stroke-width="1.5"/><line x1="26" y1="3" x2="26" y2="17" stroke="#ffb800" stroke-width="2"/><line x1="26" y1="10" x2="36" y2="10" stroke="#ffb800" stroke-width="1.5"/></svg>DIODE
+        </button>
+      </div>
+    </div>
+    <div class="ps" style="flex:1">
+      <div class="st">Modes</div>
+      <button class="mb active" id="mb-place" onclick="setMode('place')">◈ PLACE [P]</button>
+      <button class="mb" id="mb-wire" onclick="setMode('wire')">⌇ WIRE [W]</button>
+      <button class="mb" id="mb-select" onclick="setMode('select')">⊹ SELECT [S]</button>
+      <button class="mb" id="mb-pan" onclick="setMode('pan')">✥ PAN [Space]</button>
+      <button class="mb" id="mb-delete" onclick="setMode('delete')">✕ DELETE [D]</button>
+      <button class="mb" id="mb-region" onclick="setMode('region')">▣ REGION [R]</button>
+      <hr style="border:none;border-top:1px solid var(--bd);margin:7px 0">
+      <div class="st">Actions</div>
+      <button class="ab p" onclick="solveCircuit()">⚡ SOLVE CIRCUIT</button>
+      <button class="ab" onclick="runBode()">∿ BODE SWEEP</button>
+      <button class="ab tv" onclick="doThevenin()">⊡ THÉVENIN</button>
+      <button class="ab no" onclick="doNorton()">⊠ NORTON</button>
+      <button class="ab" onclick="computeReq()">Ω REQ CALC</button>
+      <hr style="border:none;border-top:1px solid var(--bd);margin:7px 0">
+      <button class="ab" onclick="resetView()">⌖ RESET VIEW</button>
+      <button class="ab dn" onclick="clearAll()">✕ CLEAR ALL</button>
+    </div>
+  </div>
+
+  <div class="cw" id="cwrap">
+    <svg id="csv">
+      <defs>
+        <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <g id="world">
+        <g id="l-wires"></g>
+        <g id="l-flow"></g>
+        <g id="l-comps"></g>
+        <g id="l-nodes"></g>
+        <g id="l-selbox"></g>
+        <g id="l-errs"></g>
+      </g>
+    </svg>
+    <div class="vbar">
+      <div class="vbd" id="vbd" style="background:var(--txd)"></div>
+      <span id="vbtxt" style="color:var(--txd)">NO CIRCUIT</span>
+    </div>
+  </div>
+
+  <div class="rp">
+    <div class="rtbs">
+      <div class="rt active" data-tab="insp">INSP</div>
+      <div class="rt" data-tab="anlys">ANLYS</div>
+      <div class="rt" data-tab="bode">BODE</div>
+      <div class="rt" data-tab="req">REQ</div>
+    </div>
+    <div class="rpn active" id="rpn-insp"><div id="insp-body"><div class="ie">// SELECT A<br>// COMPONENT<br>// TO INSPECT</div></div></div>
+    <div class="rpn" id="rpn-anlys"><div id="anlys-body"><div class="ie">// SOLVE TO<br>// SEE RESULTS</div></div></div>
+    <div class="rpn" id="rpn-bode">
+      <div class="pl" style="margin-bottom:3px">F_START (Hz)</div>
+      <input class="pi" style="width:100%;margin-bottom:8px" id="bf1" type="number" value="1">
+      <div class="pl" style="margin-bottom:3px">F_STOP (Hz)</div>
+      <input class="pi" style="width:100%;margin-bottom:8px" id="bf2" type="number" value="100000">
+      <button class="ab" onclick="runBode()">▶ RUN SWEEP</button>
+      <div id="bode-body" style="margin-top:8px"><div class="ie">// RUN SWEEP</div></div>
+    </div>
+    <div class="rpn" id="rpn-req"><div id="req-body"><div class="ie">// CLICK<br>// Ω REQ CALC</div></div></div>
+  </div>
+</div>
+<div id="tooltip"><div class="ttn" id="ttn"></div><div id="ttb"></div></div>
+
+<script>
+const GRID=20,snap=v=>Math.round(v/GRID)*GRID;
+const META={
+  vs:  {name:'DC Voltage Source',color:'#00e5ff',unit:'V',dv:5,tip:'Ideal DC voltage source. Sets fixed potential difference. V=EMF.',term:'vert'},
+  vac: {name:'AC Voltage Source',color:'#a855f7',unit:'V',dv:1,tip:'Sinusoidal AC source. Set amplitude (peak) and frequency.',term:'vert'},
+  is:  {name:'DC Current Source',color:'#ff4d6d',unit:'A',dv:0.001,tip:'Ideal current source. Forces fixed current regardless of voltage.',term:'vert'},
+  r:   {name:'Resistor',color:'#c8dce8',unit:'Ω',dv:1000,tip:'Ohmic resistance. V=IR. Dissipates P=I²R as heat.',term:'horiz'},
+  c:   {name:'Capacitor',color:'#5cc8ff',unit:'F',dv:1e-6,tip:'Stores charge. DC open circuit. Z_C=1/(jωC). τ=RC.',term:'horiz'},
+  l:   {name:'Inductor',color:'#a855f7',unit:'H',dv:1e-3,tip:'Stores magnetic energy. DC short circuit. Z_L=jωL. τ=L/R.',term:'horiz'},
+  diode:{name:'Diode (Si)',color:'#ffb800',unit:'V',dv:0.7,tip:'Unidirectional. V_f≈0.7V forward drop. Linearized model used.',term:'horiz'},
+  gnd: {name:'Ground',color:'#3d5468',unit:'',dv:0,tip:'Reference node. V=0V. All voltages measured relative to this.',term:'top'},
+};
+const S={comps:[],wires:[],mode:'place',plType:'vs',selIds:new Set(),wireStart:null,idc:0,xf:{x:0,y:0,k:1},solved:false,sol:null,drag:null,selBox:null,region:new Set()};
+
+// D3 setup
+const svg=d3.select('#csv'),world=d3.select('#world');
+const zoomBeh=d3.zoom().scaleExtent([0.12,5]).on('zoom',e=>{S.xf=e.transform;world.attr('transform',e.transform);updateGrid(e.transform);});
+
+function updateGrid(t){const gs=GRID*t.k,ox=t.x%gs,oy=t.y%gs;d3.select('#csv').style('background-size',`${gs}px ${gs}px`).style('background-position',`${ox}px ${oy}px`);}
+
+// Wire preview & sel box
+const wprev=world.append('line').attr('stroke','#00e5ff').attr('stroke-width',1.5).attr('stroke-dasharray','6,4').attr('pointer-events','none').style('display','none');
+const sboxEl=d3.select('#l-selbox').append('rect').attr('class','sel-box').style('display','none');
+
+function svgPt(e){const r=document.getElementById('csv').getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;return{x:(mx-S.xf.x)/S.xf.k,y:(my-S.xf.y)/S.xf.k};}
+function svgSnap(e){const p=svgPt(e);return{x:snap(p.x),y:snap(p.y)};}
+
+// Main SVG events
+svg.on('wheel',function(e){e.preventDefault();},{passive:false});
+svg.call(d3.zoom().filter(e=>e.type==='wheel').scaleExtent([0.12,5]).on('zoom',e=>{S.xf=e.transform;world.attr('transform',e.transform);updateGrid(e.transform);}));
+
+svg.on('mousemove',function(e){
+  const p=svgSnap(e),raw=svgPt(e);
+  if(S.mode==='wire'&&S.wireStart)wprev.style('display',null).attrs({x1:S.wireStart.x,y1:S.wireStart.y,x2:p.x,y2:p.y});
+  if(S.mode==='region'&&S.selBox){
+    const bx=Math.min(S.selBox.sx,raw.x),by=Math.min(S.selBox.sy,raw.y),bw=Math.abs(raw.x-S.selBox.sx),bh=Math.abs(raw.y-S.selBox.sy);
+    sboxEl.style('display',null).attrs({x:bx,y:by,width:bw,height:bh});
+    S.selBox.ex=raw.x;S.selBox.ey=raw.y;
+    doRegionHighlight(bx,by,bw,bh);
+  }
+  if(S.drag){
+    const dx=raw.x-S.drag.sx,dy=raw.y-S.drag.sy;
+    S.drag.comps.forEach(dc=>{const c=S.comps.find(x=>x.id===dc.id);if(c){c.x=snap(dc.ox+dx);c.y=snap(dc.oy+dy);posComp(c);}});
+    S.drag.wires.forEach(dw=>{const w=S.wires.find(x=>x.id===dw.id);if(w){w.x1=snap(dw.ox1+dx);w.y1=snap(dw.oy1+dy);w.x2=snap(dw.ox2+dx);w.y2=snap(dw.oy2+dy);d3.select(`#wire-${w.id}`).attrs({x1:w.x1,y1:w.y1,x2:w.x2,y2:w.y2});}});
+    updateDots();checkValidity();
+  }
+  document.getElementById('tooltip').style.display='none';
+});
+
+svg.on('mousedown',function(e){
+  if(e.button!==0||S.mode==='pan')return;
+  const p=svgSnap(e),raw=svgPt(e);
+  if(S.mode==='place'){e.stopPropagation();placeComp(S.plType,p.x,p.y);}
+  else if(S.mode==='wire'){e.stopPropagation();if(!S.wireStart)S.wireStart={x:p.x,y:p.y};else{addWire(S.wireStart.x,S.wireStart.y,p.x,p.y);S.wireStart={x:p.x,y:p.y};wprev.style('display','none');}}
+  else if(S.mode==='region'){S.selBox={sx:raw.x,sy:raw.y,ex:raw.x,ey:raw.y};S.region.clear();}
+  else if(S.mode==='select'){S.selIds.clear();renderAllComps();showInspector(null);}
+});
+
+svg.on('mouseup',function(e){
+  if(S.mode==='region'&&S.selBox){
+    const bx=Math.min(S.selBox.sx,S.selBox.ex),by=Math.min(S.selBox.sy,S.selBox.ey),bw=Math.abs(S.selBox.ex-S.selBox.sx),bh=Math.abs(S.selBox.ey-S.selBox.sy);
+    doRegionHighlight(bx,by,bw,bh);sboxEl.style('display','none');S.selBox=null;
+    if(S.region.size)setVbar(`${S.region.size} SELECTED — RUN THÉVENIN/NORTON`,'var(--ac4)','var(--ac4)');
+  }
+  if(S.drag){S.drag=null;checkValidity();}
+});
+
+svg.on('contextmenu',function(e){e.preventDefault();S.wireStart=null;wprev.style('display','none');});
+
+// Enable pan only in pan mode
+function enablePan(){svg.call(zoomBeh);}
+function disablePan(){svg.on('.zoom',null);svg.call(d3.zoom().filter(e=>e.type==='wheel').scaleExtent([0.12,5]).on('zoom',e=>{S.xf=e.transform;world.attr('transform',e.transform);updateGrid(e.transform);}));}
+
+// ── TERMINALS ──
+function getTerm(comp){
+  const m=META[comp.type];
+  let t1,t2;
+  if(m.term==='horiz'){t1={x:-28,y:0};t2={x:28,y:0};}
+  else if(m.term==='vert'){t1={x:0,y:-28};t2={x:0,y:28};}
+  else{t1={x:0,y:-16};t2=null;}
+  const rad=comp.rotation*Math.PI/180;
+  const rot=({x,y})=>({x:Math.round(x*Math.cos(rad)-y*Math.sin(rad)),y:Math.round(x*Math.sin(rad)+y*Math.cos(rad))});
+  return{t1:rot(t1),t2:t2?rot(t2):null};
+}
+
+// ── PLACE ──
+function placeComp(type,x,y){
+  const id=`${type}_${++S.idc}`;
+  const m=META[type];
+  const c={id,type,x,y,value:m.dv,freq:1000,rotation:0,result:null};
+  S.comps.push(c);renderComp(c);updateHdr();checkValidity();
+}
+
+// ── RENDER COMP ──
+function renderComp(comp){
+  d3.select(`#cg-${comp.id}`).remove();
+  const g=d3.select('#l-comps').append('g').attr('id',`cg-${comp.id}`).attr('class','compg').attr('transform',`translate(${comp.x},${comp.y}) rotate(${comp.rotation})`);
+  drawShape(g,comp);
+  const m=META[comp.type];
+  const ly=m.term==='horiz'?-17:(m.term==='vert'?-33:23);
+  g.append('text').attr('class','clbl').attrs({x:0,y:ly,'text-anchor':'middle',fill:'#3d5468','font-size':8,'font-family':'Space Mono'}).text(comp.id);
+  g.append('text').attr('class','cvlbl').attr('id',`vl-${comp.id}`).attrs({x:0,y:ly-10,'text-anchor':'middle',fill:m.color,'font-size':8,'font-family':'Space Mono'}).text(fmtV(comp.value,m.unit));
+  // Rotate handle
+  const rh=g.append('g').attr('transform','translate(20,-20)').style('cursor','crosshair');
+  rh.append('circle').attr('r',5).attr('fill','rgba(255,184,0,0)').attr('stroke','none');
+  rh.append('text').attrs({x:0,y:4,'text-anchor':'middle',fill:'rgba(255,184,0,0.5)','font-size':9,'font-family':'Space Mono','pointer-events':'none'}).text('↻');
+  rh.on('mouseover',function(){d3.select(this).select('circle').attr('fill','rgba(255,184,0,0.15)');d3.select(this).select('text').attr('fill','var(--ac4)');})
+    .on('mouseout',function(){d3.select(this).select('circle').attr('fill','rgba(255,184,0,0)');d3.select(this).select('text').attr('fill','rgba(255,184,0,0.5)');})
+    .on('mousedown',function(e){
+      e.stopPropagation();
+      const startA=Math.atan2(svgPt(e).y-comp.y,svgPt(e).x-comp.x)*180/Math.PI;
+      const startR=comp.rotation;
+      svg.on('mousemove.rot',function(e2){
+        const a=Math.atan2(svgPt(e2).y-comp.y,svgPt(e2).x-comp.x)*180/Math.PI;
+        comp.rotation=((startR+(a-startA))%360+360)%360;
+        comp.rotation=Math.round(comp.rotation/45)*45;
+        posComp(comp);
+      });
+      svg.on('mouseup.rot',function(){svg.on('mousemove.rot',null).on('mouseup.rot',null);updateDots();checkValidity();});
+    });
+  // Interactions
+  g.on('click',function(e){
+    e.stopPropagation();
+    if(S.mode==='delete'){delComp(comp.id);return;}
+    if(S.mode==='select'||S.mode==='place'||S.mode==='region'){
+      S.selIds.clear();S.selIds.add(comp.id);renderAllComps();showInspector(comp);switchTab('insp');
+    }
+  })
+  .on('mousedown',function(e){
+    if(e.button!==0)return;
+    if(S.mode==='select'){
+      e.stopPropagation();
+      const raw=svgPt(e);
+      if(!S.selIds.has(comp.id)){S.selIds.clear();S.selIds.add(comp.id);renderAllComps();showInspector(comp);}
+      const selC=S.comps.filter(c=>S.selIds.has(c.id));
+      S.drag={sx:raw.x,sy:raw.y,comps:selC.map(c=>({id:c.id,ox:c.x,oy:c.y})),wires:[]};
+    }
+  })
+  .on('mouseover',function(e){showTip(e,comp);})
+  .on('mouseout',()=>{document.getElementById('tooltip').style.display='none';});
+  if(S.selIds.has(comp.id)||S.region.has(comp.id))g.classed('comp-sel',true);
+}
+
+function drawShape(g,comp){
+  const m=META[comp.type];
+  const sh=g.append('g').attr('class','cshell');
+  if(comp.type==='r'){
+    sh.append('line').attrs({x1:-28,y1:0,x2:-18,y2:0,stroke:m.color,'stroke-width':1.5});
+    sh.append('rect').attrs({x:-18,y:-8,width:36,height:16,fill:'rgba(200,220,232,0.03)',stroke:m.color,'stroke-width':1.5,rx:2});
+    sh.append('line').attrs({x1:18,y1:0,x2:28,y2:0,stroke:m.color,'stroke-width':1.5});
+  }else if(comp.type==='c'){
+    sh.append('line').attrs({x1:-28,y1:0,x2:-7,y2:0,stroke:m.color,'stroke-width':1.5});
+    sh.append('line').attrs({x1:-7,y1:-12,x2:-7,y2:12,stroke:m.color,'stroke-width':2.5});
+    sh.append('line').attrs({x1:7,y1:-12,x2:7,y2:12,stroke:m.color,'stroke-width':2.5});
+    sh.append('line').attrs({x1:7,y1:0,x2:28,y2:0,stroke:m.color,'stroke-width':1.5});
+  }else if(comp.type==='l'){
+    sh.append('line').attrs({x1:-28,y1:0,x2:-20,y2:0,stroke:m.color,'stroke-width':1.5});
+    sh.append('path').attr('d','M-20 0 Q-15 -9 -10 0 Q-5 -9 0 0 Q5 -9 10 0 Q15 -9 20 0').attrs({fill:'none',stroke:m.color,'stroke-width':1.5});
+    sh.append('line').attrs({x1:20,y1:0,x2:28,y2:0,stroke:m.color,'stroke-width':1.5});
+  }else if(comp.type==='vs'){
+    sh.append('line').attrs({x1:0,y1:-28,x2:0,y2:-16,stroke:m.color,'stroke-width':1.5});
+    sh.append('circle').attrs({cx:0,cy:0,r:16,fill:'rgba(0,229,255,0.03)',stroke:m.color,'stroke-width':1.5});
+    sh.append('text').attrs({x:0,y:5,'text-anchor':'middle',fill:m.color,'font-size':13,'font-family':'Space Mono'}).text('+');
+    sh.append('line').attrs({x1:0,y1:16,x2:0,y2:28,stroke:m.color,'stroke-width':1.5});
+  }else if(comp.type==='vac'){
+    sh.append('line').attrs({x1:0,y1:-28,x2:0,y2:-16,stroke:m.color,'stroke-width':1.5});
+    sh.append('circle').attrs({cx:0,cy:0,r:16,fill:'rgba(168,85,247,0.03)',stroke:m.color,'stroke-width':1.5});
+    sh.append('path').attr('d','M-8 2 Q-4 -7 0 2 Q4 11 8 2').attrs({fill:'none',stroke:m.color,'stroke-width':1.5});
+    sh.append('line').attrs({x1:0,y1:16,x2:0,y2:28,stroke:m.color,'stroke-width':1.5});
+  }else if(comp.type==='is'){
+    sh.append('line').attrs({x1:0,y1:-28,x2:0,y2:-16,stroke:m.color,'stroke-width':1.5});
+    sh.append('circle').attrs({cx:0,cy:0,r:16,fill:'rgba(255,77,109,0.03)',stroke:m.color,'stroke-width':1.5});
+    sh.append('line').attrs({x1:0,y1:-7,x2:0,y2:8,stroke:m.color,'stroke-width':1.5});
+    sh.append('polygon').attr('points','0,8 -5,1 5,1').attrs({fill:m.color});
+    sh.append('line').attrs({x1:0,y1:16,x2:0,y2:28,stroke:m.color,'stroke-width':1.5});
+  }else if(comp.type==='diode'){
+    sh.append('line').attrs({x1:-28,y1:0,x2:-12,y2:0,stroke:m.color,'stroke-width':1.5});
+    sh.append('polygon').attr('points','-12,-10 -12,10 12,0').attrs({fill:'rgba(255,184,0,0.07)',stroke:m.color,'stroke-width':1.5});
+    sh.append('line').attrs({x1:12,y1:-10,x2:12,y2:10,stroke:m.color,'stroke-width':2});
+    sh.append('line').attrs({x1:12,y1:0,x2:28,y2:0,stroke:m.color,'stroke-width':1.5});
+  }else if(comp.type==='gnd'){
+    sh.append('line').attrs({x1:0,y1:-16,x2:0,y2:0,stroke:m.color,'stroke-width':1.5});
+    sh.append('line').attrs({x1:-16,y1:0,x2:16,y2:0,stroke:m.color,'stroke-width':2.5});
+    sh.append('line').attrs({x1:-11,y1:5,x2:11,y2:5,stroke:m.color,'stroke-width':2});
+    sh.append('line').attrs({x1:-6,y1:10,x2:6,y2:10,stroke:m.color,'stroke-width':1.5});
+  }
+}
+
+function posComp(comp){d3.select(`#cg-${comp.id}`).attr('transform',`translate(${comp.x},${comp.y}) rotate(${comp.rotation})`);}
+function renderAllComps(){S.comps.forEach(c=>{d3.select(`#cg-${c.id}`).classed('comp-sel',S.selIds.has(c.id)||S.region.has(c.id));});}
+
+// ── WIRES ──
+function addWire(x1,y1,x2,y2){
+  if(x1===x2&&y1===y2)return;
+  const id=`w_${++S.idc}`,wire={id,x1,y1,x2,y2};
+  S.wires.push(wire);renderWire(wire);updateDots();updateHdr();checkValidity();
+}
+function renderWire(w){
+  d3.select(`#wire-${w.id}`).remove();
+  d3.select('#l-wires').append('line').attr('id',`wire-${w.id}`).attr('class','wl')
+    .attrs({x1:w.x1,y1:w.y1,x2:w.x2,y2:w.y2,stroke:'#162230','stroke-width':2,'stroke-linecap':'round'})
+    .on('click',function(e){e.stopPropagation();if(S.mode==='delete'){S.wires=S.wires.filter(x=>x.id!==w.id);d3.select(`#wire-${w.id}`).remove();updateDots();updateHdr();checkValidity();}})
+    .on('mouseover',function(){if(S.mode==='delete')d3.select(this).attr('stroke','var(--inv)');})
+    .on('mouseout',function(){d3.select(this).attr('stroke','#162230');});
+}
+function updateDots(){
+  d3.select('#l-nodes').selectAll('*').remove();
+  const jc={};
+  S.wires.forEach(w=>{[[w.x1,w.y1],[w.x2,w.y2]].forEach(([x,y])=>{const k=`${x},${y}`;jc[k]=(jc[k]||0)+1;});});
+  Object.entries(jc).forEach(([k,n])=>{if(n>=2){const[x,y]=k.split(',').map(Number);d3.select('#l-nodes').append('circle').attrs({cx:x,cy:y,r:3.5,fill:'#00e5ff','fill-opacity':0.7});}});
+}
+
+// ── DELETE ──
+function delComp(id){S.comps=S.comps.filter(c=>c.id!==id);d3.select(`#cg-${id}`).remove();S.selIds.delete(id);S.region.delete(id);showInspector(null);updateHdr();checkValidity();}
+
+// ── REGION ──
+function doRegionHighlight(bx,by,bw,bh){
+  S.comps.forEach(c=>{const in_=c.x>=bx&&c.x<=bx+bw&&c.y>=by&&c.y<=by+bh;if(in_)S.region.add(c.id);else S.region.delete(c.id);});
+  renderAllComps();
+}
+
+// ── INSPECTOR ──
+function showInspector(comp){
+  const body=document.getElementById('insp-body');
+  if(!comp){body.innerHTML='<div class="ie">// SELECT A<br>// COMPONENT<br>// TO INSPECT</div>';return;}
+  const m=META[comp.type];
+  let h=`<div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txd);margin-bottom:9px">// ${comp.id.toUpperCase()}</div>`;
+  h+=`<div style="background:var(--sf2);border-left:2px solid ${m.color};padding:7px;margin-bottom:9px;font-family:'Space Mono',monospace;font-size:8px;line-height:1.9;color:var(--txd)">${m.tip}</div>`;
+  h+=`<div class="st" style="margin-bottom:6px">PROPERTIES</div>`;
+  if(m.unit)h+=`<div class="pr"><span class="pl">VALUE (${m.unit})</span><input class="pi" type="number" value="${comp.value}" step="${comp.value>1?comp.value*0.1:comp.value}" onchange="updVal('${comp.id}',this.value)"></div>`;
+  if(comp.type==='vac')h+=`<div class="pr"><span class="pl">FREQ (Hz)</span><input class="pi" type="number" value="${comp.freq||1000}" onchange="updFreq('${comp.id}',this.value)"></div>`;
+  h+=`<div class="pr"><span class="pl">ROTATION</span><input class="pi" type="number" value="${comp.rotation}" step="45" onchange="updRot('${comp.id}',this.value)"></div>`;
+  h+=`<div class="pr"><span class="pl">POSITION</span><span class="pv">(${comp.x}, ${comp.y})</span></div>`;
+  if(comp.result){
+    h+=`<div class="st" style="margin:10px 0 7px">SIMULATION</div><div class="rb" style="border-color:${m.color}">`;
+    h+=`<div class="rr"><span class="rl">VOLTAGE</span><span class="rv v">${fmtN(comp.result.v)} V</span></div>`;
+    h+=`<div class="rr"><span class="rl">CURRENT</span><span class="rv i">${fmtN(comp.result.i)} A</span></div>`;
+    h+=`<div class="rr"><span class="rl">POWER</span><span class="rv pw">${fmtN(comp.result.p)} W</span></div>`;
+    if(comp.type==='r')h+=`<div class="rr"><span class="rl">CONDUCTANCE</span><span class="rv g">${fmtN(1/comp.value)} S</span></div>`;
+    h+=`</div>`;
+  }
+  body.innerHTML=h;
+}
+
+function updVal(id,v){const c=S.comps.find(x=>x.id===id);if(!c)return;c.value=parseFloat(v);d3.select(`#vl-${id}`).text(fmtV(c.value,META[c.type].unit));S.solved=false;checkValidity();}
+function updFreq(id,v){const c=S.comps.find(x=>x.id===id);if(c)c.freq=parseFloat(v);}
+function updRot(id,v){const c=S.comps.find(x=>x.id===id);if(!c)return;c.rotation=parseFloat(v)%360;posComp(c);checkValidity();}
+
+// ── TOOLTIP ──
+function showTip(e,comp){
+  const m=META[comp.type],tt=document.getElementById('tooltip');
+  document.getElementById('ttn').textContent=m.name;
+  let b=`<span class="ttk">ID: </span>${comp.id}<br>`;
+  if(m.unit)b+=`<span class="ttk">VALUE: </span>${fmtV(comp.value,m.unit)}<br>`;
+  b+=`<span class="ttk">ROT: </span>${comp.rotation}°<br>`;
+  b+=`<span style="color:var(--txd);font-size:8px;line-height:1.8">${m.tip}</span>`;
+  document.getElementById('ttb').innerHTML=b;
+  tt.style.display='block';tt.style.left=(e.clientX+14)+'px';tt.style.top=(e.clientY-8)+'px';
+  const r=tt.getBoundingClientRect();
+  if(r.right>window.innerWidth)tt.style.left=(e.clientX-r.width-14)+'px';
+}
+
+// ── SHARED TERMINAL HELPER (used by validity + netlist) ──
+function getWT(comp){const t=getTerm(comp);return{p1:{x:comp.x+t.t1.x,y:comp.y+t.t1.y},p2:t.t2?{x:comp.x+t.t2.x,y:comp.y+t.t2.y}:null};}
+
+// ── SHARED UNION-FIND NODE BUILDER ──
+function buildNodeMap(){
+  const cs=S.comps,ws=S.wires;
+  const par={};
+  const find=k=>{if(!par[k])par[k]=k;if(par[k]!==k)par[k]=find(par[k]);return par[k];};
+  const union=(a,b)=>{par[find(a)]=find(b);};
+  ws.forEach(w=>{const ka=`${w.x1},${w.y1}`,kb=`${w.x2},${w.y2}`;find(ka);find(kb);union(ka,kb);});
+  cs.forEach(c=>{
+    const tw=getWT(c);const k1=`${tw.p1.x},${tw.p1.y}`;find(k1);if(tw.p2)find(`${tw.p2.x},${tw.p2.y}`);
+    ws.forEach(w=>{
+      if(w.x1===tw.p1.x&&w.y1===tw.p1.y)union(k1,`${w.x1},${w.y1}`);
+      if(w.x2===tw.p1.x&&w.y2===tw.p1.y)union(k1,`${w.x2},${w.y2}`);
+      if(tw.p2){const k2=`${tw.p2.x},${tw.p2.y}`;if(w.x1===tw.p2.x&&w.y1===tw.p2.y)union(k2,`${w.x1},${w.y1}`);if(w.x2===tw.p2.x&&w.y2===tw.p2.y)union(k2,`${w.x2},${w.y2}`);}
+    });
+  });
+  const can={};let cid=0;
+  const allK=new Set();
+  ws.forEach(w=>{allK.add(`${w.x1},${w.y1}`);allK.add(`${w.x2},${w.y2}`);});
+  cs.forEach(c=>{const tw=getWT(c);allK.add(`${tw.p1.x},${tw.p1.y}`);if(tw.p2)allK.add(`${tw.p2.x},${tw.p2.y}`);});
+  allK.forEach(k=>{const r=find(k);if(can[r]===undefined)can[r]=cid++;});
+  const nodeOf=(x,y)=>{const k=`${x},${y}`;if(par[k]===undefined)return -1;return can[find(k)]??-1;};
+  let gnd=-1;cs.forEach(c=>{if(c.type==='gnd'){const tw=getWT(c);gnd=nodeOf(tw.p1.x,tw.p1.y);}});
+  return{nodeOf,find,N:cid,gnd,par,can};
+}
+
+// ── VALIDITY (deep topological + KCL) ──
+function checkValidity(){
+  const cs=S.comps,ws=S.wires;
+  // Clear error markers
+  cs.forEach(c=>d3.select(`#cg-${c.id}`).classed('comp-error',false).classed('comp-warn',false));
+  d3.select('#l-errs').selectAll('*').remove();
+
+  if(!cs.length){setVbar('NO CIRCUIT','var(--txd)','var(--txd)');setStatus('IDLE','');return;}
+
+  const errs=[],warns=[];
+  const hg=cs.some(c=>c.type==='gnd');
+  const hs=cs.some(c=>['vs','vac','is'].includes(c.type));
+  const hl=cs.some(c=>['r','c','l','diode'].includes(c.type));
+
+  if(!hg){errs.push('MISSING GROUND NODE');}
+  if(!hs){errs.push('NO SOURCE — ADD V/I SOURCE');}
+  if(!hl){warns.push('NO PASSIVE LOAD ELEMENTS');}
+
+  // Build node map
+  const{nodeOf,N,gnd}=buildNodeMap();
+
+  // Build terminal → wire connectivity lookup
+  const wireEndpts=new Set();
+  ws.forEach(w=>{wireEndpts.add(`${w.x1},${w.y1}`);wireEndpts.add(`${w.x2},${w.y2}`);});
+
+  // Build terminal point → component map
+  const termPts={};
+  cs.forEach(c=>{
+    const tw=getWT(c);
+    const addT=pt=>{const k=`${pt.x},${pt.y}`;if(!termPts[k])termPts[k]=[];termPts[k].push(c.id);};
+    addT(tw.p1);if(tw.p2)addT(tw.p2);
+  });
+
+  // CHECK 1: Floating terminals
+  cs.forEach(c=>{
+    if(c.type==='gnd')return;
+    const tw=getWT(c);
+    const checkTerm=(pt,label)=>{
+      const k=`${pt.x},${pt.y}`;
+      const hasWire=wireEndpts.has(k);
+      const hasOtherComp=(termPts[k]||[]).filter(id=>id!==c.id).length>0;
+      if(!hasWire&&!hasOtherComp){
+        errs.push(`${c.id} ${label} UNCONNECTED`);
+        d3.select(`#cg-${c.id}`).classed('comp-error',true);
+        markFloating(pt.x,pt.y);
+      }
+    };
+    checkTerm(tw.p1,'T1');
+    if(tw.p2)checkTerm(tw.p2,'T2');
+  });
+
+  // CHECK 2: Short circuits — both terminals of vsrc on same node
+  cs.forEach(c=>{
+    if(!['vs','vac'].includes(c.type))return;
+    const tw=getWT(c);
+    const n1=nodeOf(tw.p1.x,tw.p1.y),n2=nodeOf(tw.p2.x,tw.p2.y);
+    if(n1>=0&&n2>=0&&n1===n2){
+      errs.push(`${c.id} SHORT CIRCUIT — TERMINALS ON SAME NODE`);
+      d3.select(`#cg-${c.id}`).classed('comp-error',true);
+    }
+  });
+
+  // CHECK 3: Isolated nodes (no path to ground)
+  if(gnd>=0){
+    const reach=new Set([gnd]);
+    let changed=true;
+    while(changed){
+      changed=false;
+      cs.forEach(c=>{
+        const tw=getWT(c);
+        const n1=nodeOf(tw.p1.x,tw.p1.y);
+        const n2=tw.p2?nodeOf(tw.p2.x,tw.p2.y):gnd;
+        if(n1>=0&&n2>=0){
+          if(reach.has(n1)&&!reach.has(n2)){reach.add(n2);changed=true;}
+          if(reach.has(n2)&&!reach.has(n1)){reach.add(n1);changed=true;}
+        }
+      });
+    }
+    cs.forEach(c=>{
+      if(c.type==='gnd')return;
+      const tw=getWT(c);
+      const n1=nodeOf(tw.p1.x,tw.p1.y);
+      if(n1>=0&&!reach.has(n1)){
+        errs.push(`${c.id} ISOLATED — NO PATH TO GROUND`);
+        d3.select(`#cg-${c.id}`).classed('comp-error',true);
+      }
+    });
+  }
+
+  // CHECK 4: Post-solve KCL verification
+  if(S.sol&&!errs.length){
+    const{res,gnd:sg}=S.sol;
+
+    // Build per-node current balance: for every element, track current into/out of each node
+    const nodeBalance={}; // nodeId -> net current (positive = net in, negative = net out)
+    Object.entries(res).forEach(([id,r])=>{
+      const c=S.comps.find(x=>x.id===id);if(!c)return;
+      const tw=getWT(c);
+      const n1=nodeOf(tw.p1.x,tw.p1.y);
+      const n2=tw.p2?nodeOf(tw.p2.x,tw.p2.y):sg;
+      if(n1<0||n2<0)return;
+      // Conventional current: positive i means current flows from n1 to n2 (out of n1, into n2)
+      // So for n1: current leaves (negative contribution), n2: current enters (positive)
+      const i=r.i;
+      if(!nodeBalance[n1])nodeBalance[n1]=0;
+      if(!nodeBalance[n2])nodeBalance[n2]=0;
+      nodeBalance[n1]-=i; // current leaving n1
+      nodeBalance[n2]+=i; // current entering n2
+    });
+
+    // KCL: net balance at every non-ground node should be ~0
+    const kclViolNodes=[];
+    Object.entries(nodeBalance).forEach(([n,balance])=>{
+      if(parseInt(n)===sg)return;
+      const totalCurr=Object.values(res).reduce((s,r)=>s+Math.abs(r.i),0);
+      const scale=totalCurr||1;
+      if(Math.abs(balance)/scale>0.005){ // >0.5% violation
+        kclViolNodes.push({n:parseInt(n),balance});
+        warns.push(`KCL VIOLATION N${n}: NET=${fmtN(balance)}A (should=0)`);
+      }
+    });
+
+    // Highlight components on violating nodes
+    if(kclViolNodes.length){
+      kclViolNodes.forEach(({n})=>{
+        cs.forEach(c=>{
+          const tw=getWT(c);
+          const cn1=nodeOf(tw.p1.x,tw.p1.y);
+          const cn2=tw.p2?nodeOf(tw.p2.x,tw.p2.y):sg;
+          if(cn1===n||cn2===n)d3.select(`#cg-${c.id}`).classed('comp-warn',true);
+        });
+      });
+    }
+
+    // CHECK 5: Verify current flows consistently through wires
+    // At each wire junction node, all wires should carry current in compatible directions
+    // Build: node -> list of wire currents (signed: + entering, - leaving)
+    const nodeWireCurrents={}; // nodeId -> [signed_current, ...]
+    S.sol.wireCurrents={};
+    ws.forEach(w=>{
+      // Find the node this wire connects to and what current flows through it
+      // Use voltage difference on wire endpoints to determine direction
+      const vStart=getNodeVoltage(w.x1,w.y1,nodeOf,S.sol.volt);
+      const vEnd=getNodeVoltage(w.x2,w.y2,nodeOf,S.sol.volt);
+      // Current flows from higher V to lower V (conventional)
+      const vDiff=vStart-vEnd;
+      // Store signed current magnitude and direction for animation
+      S.sol.wireCurrents[w.id]={vStart,vEnd,dir:vDiff>=0?'fwd':'rev',magnitude:Math.abs(vDiff)};
+    });
+  }
+
+  // Outcome
+  if(errs.length){
+    setVbar(`✗ ${errs[0]}`,'var(--inv)','var(--inv)');
+    setStatus('INVALID','inv');
+  }else if(warns.length){
+    setVbar(`⚠ ${warns[0]}`,'var(--wn)','var(--wn)');
+    setStatus('WARNING','inv');
+  }else{
+    const msg=S.solved?'✓ SOLVED — KCL VERIFIED':'✓ VALID — PRESS SOLVE OR ENTER';
+    setVbar(msg,'var(--vl)','var(--vl)');
+    setStatus(S.solved?'SOLVED ✓':'READY','vl');
+  }
+  return{errs,warns};
+}
+
+function getNodeVoltage(x,y,nodeOf,volt){
+  const n=nodeOf(x,y);
+  return(n>=0&&volt[n]!==undefined)?volt[n]:0;
+}
+
+function markFloating(x,y){
+  const g=d3.select('#l-errs').append('g').attr('pointer-events','none');
+  // Pulsing ring
+  g.append('circle').attrs({cx:x,cy:y,r:10,fill:'none',stroke:'var(--inv)','stroke-width':1.5,'stroke-dasharray':'3,2'});
+  // Warning label
+  g.append('text').attr('class','kcl-badge').attrs({x:x+13,y:y-3,fill:'var(--inv)','font-size':8,'font-family':'Space Mono'}).text('OPEN');
+  g.append('text').attr('class','kcl-badge').attrs({x:x+13,y:y+7,fill:'var(--inv)','font-size':8,'font-family':'Space Mono'}).text('CIRCUIT');
+}
+
+function setVbar(t,c,dc){document.getElementById('vbtxt').textContent=t;document.getElementById('vbtxt').style.color=c;const d=document.getElementById('vbd');d.style.background=dc;d.style.boxShadow=`0 0 6px ${dc}`;}
+
+// ── MNA SOLVER ──
+function buildNetlist(){
+  const{nodeOf,N,gnd}=buildNodeMap();
+  const safeGnd=gnd>=0?gnd:0;
+  const els=S.comps.map(c=>{const tw=getWT(c);const n1=nodeOf(tw.p1.x,tw.p1.y);const n2=tw.p2?nodeOf(tw.p2.x,tw.p2.y):safeGnd;return{...c,n1:n1>=0?n1:safeGnd,n2:n2>=0?n2:safeGnd};});
+  return{els,N,gnd:safeGnd};
+}
+
+function mna(nl){
+  const{els,N,gnd}=nl;
+  const vs=els.filter(e=>e.type==='vs'||e.type==='vac');
+  const sz=N+vs.length;
+  const G=Array.from({length:sz},()=>new Array(sz).fill(0));
+  const b=new Array(sz).fill(0);
+  els.forEach(el=>{
+    const{type,value,n1,n2}=el;
+    const add=(r,c,v)=>{if(r>=0&&r<sz&&c>=0&&c<sz)G[r][c]+=v;};
+    if(type==='r'){const g=1/value;if(n1!==gnd){add(n1,n1,g);if(n2!==gnd)add(n1,n2,-g);}if(n2!==gnd){add(n2,n2,g);if(n1!==gnd)add(n2,n1,-g);}}
+    else if(type==='is'){if(n1!==gnd)b[n1]-=value;if(n2!==gnd)b[n2]+=value;}
+    else if(type==='c'){const g=1e-12;if(n1!==gnd){add(n1,n1,g);if(n2!==gnd)add(n1,n2,-g);}if(n2!==gnd){add(n2,n2,g);if(n1!==gnd)add(n2,n1,-g);}}
+    else if(type==='l'){const g=1e9;if(n1!==gnd){add(n1,n1,g);if(n2!==gnd)add(n1,n2,-g);}if(n2!==gnd){add(n2,n2,g);if(n1!==gnd)add(n2,n1,-g);}}
+    else if(type==='diode'){const g=0.038;if(n1!==gnd){add(n1,n1,g);if(n2!==gnd)add(n1,n2,-g);}if(n2!==gnd){add(n2,n2,g);if(n1!==gnd)add(n2,n1,-g);}}
+  });
+  let vi=0;vs.forEach(v=>{const k=N+vi,{n1,n2,value}=v;if(n1!==gnd){G[n1][k]+=1;G[k][n1]+=1;}if(n2!==gnd){G[n2][k]-=1;G[k][n2]-=1;}b[k]=value;vi++;});
+  for(let j=0;j<sz;j++){G[gnd][j]=0;G[j][gnd]=0;}G[gnd][gnd]=1;b[gnd]=0;
+  const x=gauss(G,b);
+  const volt={};for(let i=0;i<N;i++)volt[i]=x[i]||0;
+  const res={};
+  els.forEach(el=>{
+    const vn1=volt[el.n1]||0,vn2=volt[el.n2]||0,vd=vn1-vn2;
+    let i=0;
+    if(el.type==='r')i=vd/el.value;
+    else if(el.type==='is')i=el.value;
+    else if(el.type==='c')i=vd*1e-12;
+    else if(el.type==='l')i=vd*1e9;
+    else if(el.type==='diode')i=vd*0.038;
+    res[el.id]={v:vd,i,p:vd*i,vn1,vn2};
+  });
+  return{volt,res,N,gnd,els};
+}
+
+function gauss(A,b){
+  const n=b.length,M=A.map((r,i)=>[...r,b[i]]);
+  for(let c=0;c<n;c++){let mx=c;for(let r=c+1;r<n;r++)if(Math.abs(M[r][c])>Math.abs(M[mx][c]))mx=r;[M[c],M[mx]]=[M[mx],M[c]];if(Math.abs(M[c][c])<1e-14)continue;for(let r=c+1;r<n;r++){const f=M[r][c]/M[c][c];for(let j=c;j<=n;j++)M[r][j]-=f*M[c][j];}}
+  const x=new Array(n).fill(0);for(let i=n-1;i>=0;i--){if(Math.abs(M[i][i])<1e-14)continue;x[i]=M[i][n];for(let j=i+1;j<n;j++)x[i]-=M[i][j]*x[j];x[i]/=M[i][i];}
+  return x;
+}
+
+// ── SOLVE ──
+function solveCircuit(){
+  setStatus('SOLVING','sol');
+  const nl=buildNetlist();
+  if(!nl.els.length){setStatus('EMPTY','inv');return;}
+  try{
+    const sol=mna(nl);S.sol=sol;
+    S.comps.forEach(c=>{c.result=sol.res[c.id]||null;if(c.result)d3.select(`#vl-${c.id}`).text(fmtN(c.result.v)+'V');});
+    renderAnlys(sol);
+    const{errs,warns}=checkValidity(); // run KCL check first
+    animFlow(sol);
+    if(errs.length){
+      setStatus('ERRORS','inv');
+    }else if(warns.length){
+      setStatus('WARNINGS','inv');
+    }else{
+      setStatus('SOLVED ✓','vl');
+    }
+    S.solved=true;
+    if(S.selIds.size===1){const id=[...S.selIds][0];showInspector(S.comps.find(c=>c.id===id));}
+  }catch(e){console.error(e);setStatus('ERR','inv');}
+}
+
+function animFlow(sol){
+  d3.select('#l-flow').selectAll('*').remove();
+  d3.select('#l-nodes').selectAll('.node-volt').remove();
+
+  const{nodeOf}=buildNodeMap();
+
+  // Compute net current at each wire from node voltage difference
+  // At a junction, determine which direction current is flowing using KCL:
+  // current enters from higher potential, exits to lower potential
+
+  // Build node voltage lookup
+  const nodeV=sol.volt;
+
+  // For each wire, determine current direction from node voltages
+  // Current flows conventional: from higher V to lower V through resistive path
+  S.wires.forEach(w=>{
+    const len=Math.hypot(w.x2-w.x1,w.y2-w.y1);if(len<5)return;
+
+    const n1=nodeOf(w.x1,w.y1),n2=nodeOf(w.x2,w.y2);
+    const v1=(n1>=0&&nodeV[n1]!==undefined)?nodeV[n1]:0;
+    const v2=(n2>=0&&nodeV[n2]!==undefined)?nodeV[n2]:0;
+    const vDiff=v1-v2; // positive = current flows x1→x2
+
+    // Determine animation speed proportional to relative voltage difference
+    const allV=Object.values(nodeV);
+    const vRange=Math.max(...allV)-Math.min(...allV)||1;
+    const relDiff=Math.abs(vDiff)/vRange;
+    const speed=Math.max(0.3,Math.min(3,relDiff*4+0.4));
+    const dur=(1/speed).toFixed(2);
+
+    // Voltage glow on wire (intensity based on voltage magnitude)
+    const glowOpacity=Math.min(0.25,0.05+relDiff*0.3);
+    d3.select('#l-flow').append('line').attr('class','vg')
+      .style('stroke-opacity',glowOpacity)
+      .attrs({x1:w.x1,y1:w.y1,x2:w.x2,y2:w.y2});
+
+    // Only animate if there is meaningful voltage difference (i.e. current is flowing)
+    if(Math.abs(vDiff)<1e-6) return;
+
+    // Direction: if vDiff>0, current flows from (x1,y1) to (x2,y2)
+    // For the dash animation: 'fwd' = dashoffset decreases = dashes move x1→x2
+    // 'rev' = animation reversed = dashes move x2→x1
+    const dir=vDiff>0?'fwd':'rev';
+
+    const flowLine=d3.select('#l-flow').append('line')
+      .attr('class',`cf ${dir}`)
+      .attrs({x1:w.x1,y1:w.y1,x2:w.x2,y2:w.y2})
+      .style('animation-duration',`${dur}s`);
+  });
+
+  // Draw node voltage labels at junctions (where 3+ wires meet or at component terminals)
+  const jc={};
+  S.wires.forEach(w=>{[[w.x1,w.y1],[w.x2,w.y2]].forEach(([x,y])=>{const k=`${x},${y}`;jc[k]=(jc[k]||0)+1;});});
+  Object.entries(jc).forEach(([k,cnt])=>{
+    if(cnt<2)return;
+    const[x,y]=k.split(',').map(Number);
+    const n=nodeOf(x,y);
+    if(n<0||n===sol.gnd)return;
+    const v=nodeV[n];if(v===undefined)return;
+    // Draw a small voltage badge at junction
+    const badge=d3.select('#l-nodes').append('g').attr('class','node-volt').attr('pointer-events','none');
+    badge.append('rect').attrs({x:x+5,y:y-11,width:36,height:12,fill:'rgba(8,11,15,0.85)',rx:2});
+    badge.append('text').attr('class','node-volt-lbl').attrs({x:x+7,y:y-2}).text(`${fmtN(v)}V`);
+  });
+}
+
+function renderAnlys(sol){
+  const{volt,res,gnd}=sol;
+  let h='<div class="st">NODE VOLTAGES</div>';
+  Object.entries(volt).forEach(([n,v])=>{if(parseInt(n)===gnd)return;h+=`<div class="rr"><span class="rl">N${n}</span><span class="rv v">${fmtN(v)} V</span></div>`;});
+  h+='<div class="st" style="margin-top:10px">ELEMENTS</div>';
+  Object.entries(res).forEach(([id,r])=>{
+    const c=S.comps.find(x=>x.id===id);if(!c)return;
+    const m=META[c.type];
+    h+=`<div class="rb" style="border-color:${m.color};margin-bottom:6px">
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:${m.color};margin-bottom:4px;letter-spacing:1px">${id.toUpperCase()}</div>
+      <div class="rr"><span class="rl">V</span><span class="rv v">${fmtN(r.v)} V</span></div>
+      <div class="rr"><span class="rl">I</span><span class="rv i">${fmtN(r.i)} A</span></div>
+      <div class="rr"><span class="rl">P</span><span class="rv pw">${fmtN(r.p)} W</span></div></div>`;
+  });
+  // KCL summary table
+  if(S.sol){
+    const{nodeOf}=buildNodeMap();
+    const nodeBalance={};
+    Object.entries(res).forEach(([id,r])=>{
+      const c=S.comps.find(x=>x.id===id);if(!c)return;
+      const tw=getWT(c);
+      const n1=nodeOf(tw.p1.x,tw.p1.y);
+      const n2=tw.p2?nodeOf(tw.p2.x,tw.p2.y):gnd;
+      if(n1<0||n2<0)return;
+      if(!nodeBalance[n1])nodeBalance[n1]={in:0,out:0};
+      if(!nodeBalance[n2])nodeBalance[n2]={in:0,out:0};
+      const i=r.i;
+      if(i>0){nodeBalance[n1].out+=i;nodeBalance[n2].in+=i;}
+      else if(i<0){nodeBalance[n1].in+=Math.abs(i);nodeBalance[n2].out+=Math.abs(i);}
+    });
+    h+='<div class="st" style="margin-top:10px">KCL VERIFICATION</div>';
+    let kclOk=true;
+    Object.entries(nodeBalance).forEach(([n,bal])=>{
+      if(parseInt(n)===gnd)return;
+      const err=Math.abs(bal.in-bal.out);
+      const scale=Math.max(bal.in,bal.out,1e-15);
+      const pct=(err/scale*100).toFixed(1);
+      const ok=err/scale<0.005;
+      if(!ok)kclOk=false;
+      const col=ok?'var(--ac3)':`rgba(255,77,109,${Math.min(1,err/scale*10+0.5)})`;
+      h+=`<div class="rr"><span class="rl" style="color:${col}">N${n} KCL</span><span class="rv" style="color:${col}">${ok?'✓ OK':`✗ ${pct}% err`}</span></div>`;
+    });
+    if(kclOk){h+='<div style="background:rgba(57,255,20,0.06);border:1px solid var(--ac3);padding:7px;font-family:Space Mono,monospace;font-size:8px;color:var(--ac3);margin-top:6px;line-height:1.8">✓ ALL NODES PASS KCL<br>CURRENT CONSERVED</div>';}
+    else{h+='<div style="background:rgba(255,77,109,0.06);border:1px solid var(--inv);padding:7px;font-family:Space Mono,monospace;font-size:8px;color:var(--inv);margin-top:6px;line-height:1.8">✗ KCL VIOLATIONS DETECTED<br>CHECK FLOATING TERMINALS</div>';}
+  }
+  document.getElementById('anlys-body').innerHTML=h;
+}
+
+// ── THÉVENIN ──
+function doThevenin(){
+  switchTab('anlys');
+  const sel=[...S.region].map(id=>S.comps.find(c=>c.id===id)).filter(Boolean);
+  if(sel.length<2){document.getElementById('anlys-body').innerHTML=`<div style="background:var(--sf2);border:1px solid var(--pu);padding:11px;font-family:'Space Mono',monospace;font-size:9px;color:var(--pu);line-height:1.8">USE ▣ REGION MODE<br>TO SELECT COMPONENTS<br>THEN CLICK THÉVENIN</div>`;return;}
+  const vsrc=sel.find(c=>['vs','vac'].includes(c.type));
+  const rs=sel.filter(c=>c.type==='r');
+  let vth=vsrc?vsrc.value:0,rth=rs.length===1?rs[0].value:rs.reduce((s,r)=>s+r.value,0);
+  if(S.sol){const r=S.sol.res;sel.forEach(c=>{if(['vs','vac'].includes(c.type)&&r[c.id])vth=Math.abs(r[c.id].v)||c.value;});}
+  const isc=rth>0?vth/rth:Infinity;
+  document.getElementById('anlys-body').innerHTML=`<div class="tnr">
+    <div class="tnt">THÉVENIN EQUIVALENT</div>
+    <div class="tne">V<sub>th</sub> = <span>${fmtN(vth)} V</span></div>
+    <div class="tne">R<sub>th</sub> = <span>${fmtN(rth)} Ω</span></div>
+    <div class="tne">I<sub>sc</sub> = <span>${isFinite(isc)?fmtN(isc)+'A':'∞'}</span></div>
+  </div>
+  <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txd);line-height:1.9;margin-top:6px">
+    THÉVENIN: Replace selected network with a ${fmtN(vth)}V source + ${fmtN(rth)}Ω series resistor.<br><br>
+    MAX POWER TRANSFER when R_L = R_th = ${fmtN(rth)}Ω.<br>
+    P_max = V_th²/(4R_th) = ${fmtN(rth>0?(vth*vth)/(4*rth):0)}W
+  </div>`;
+}
+
+// ── NORTON ──
+function doNorton(){
+  switchTab('anlys');
+  const sel=[...S.region].map(id=>S.comps.find(c=>c.id===id)).filter(Boolean);
+  if(sel.length<2){document.getElementById('anlys-body').innerHTML=`<div style="background:var(--sf2);border:1px solid var(--ac4);padding:11px;font-family:'Space Mono',monospace;font-size:9px;color:var(--ac4);line-height:1.8">USE ▣ REGION MODE<br>TO SELECT COMPONENTS<br>THEN CLICK NORTON</div>`;return;}
+  const vsrc=sel.find(c=>['vs','vac'].includes(c.type));
+  const rs=sel.filter(c=>c.type==='r');
+  let vth=vsrc?vsrc.value:0,rth=rs.length===1?rs[0].value:rs.reduce((s,r)=>s+r.value,0);
+  const iN=rth>0?vth/rth:0,rN=rth,voc=iN*rN;
+  document.getElementById('anlys-body').innerHTML=`<div class="tnr" style="border-color:var(--ac4)">
+    <div class="tnt" style="color:var(--ac4)">NORTON EQUIVALENT</div>
+    <div class="tne">I<sub>N</sub> = <span>${fmtN(iN)} A</span></div>
+    <div class="tne">R<sub>N</sub> = <span>${fmtN(rN)} Ω</span></div>
+    <div class="tne">V<sub>oc</sub> = <span>${fmtN(voc)} V</span></div>
+  </div>
+  <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txd);line-height:1.9;margin-top:6px">
+    NORTON: Replace selected network with a ${fmtN(iN)}A current source || ${fmtN(rN)}Ω.<br><br>
+    NOTE: I_N = V_th / R_th. R_N = R_th.
+  </div>`;
+}
+
+// ── REQ ──
+function computeReq(){
+  switchTab('req');
+  const rs=S.comps.filter(c=>c.type==='r');
+  if(!rs.length){document.getElementById('req-body').innerHTML='<div class="ie">// NO RESISTORS<br>// IN CIRCUIT</div>';return;}
+  const rS=rs.reduce((s,r)=>s+r.value,0),rP=1/rs.reduce((s,r)=>s+1/r.value,0);
+  let h=`<div class="st">SELECT RESISTORS</div><div style="margin-bottom:8px">`;
+  rs.forEach(r=>{h+=`<div class="reqtag" onclick="this.classList.toggle('sel')" data-val="${r.value}">${r.id}: ${fmtV(r.value,'Ω')}</div>`;});
+  h+=`</div>`;
+  h+=`<button class="ab" style="margin-bottom:3px" onclick="calcSel('s')">SERIES</button>`;
+  h+=`<button class="ab" style="margin-bottom:9px" onclick="calcSel('p')">PARALLEL</button>`;
+  h+=`<div class="reqr">ALL (${rs.length}) RESISTORS:<br>Series R_eq = <b>${fmtV(rS,'Ω')}</b><br>Parallel R_eq = <b>${fmtV(rP,'Ω')}</b></div>`;
+  document.getElementById('req-body').innerHTML=h;
+}
+
+function calcSel(mode){
+  const sel=document.querySelectorAll('.reqtag.sel');
+  if(!sel.length)return;
+  const vals=[...sel].map(t=>parseFloat(t.dataset.val));
+  const req=mode==='s'?vals.reduce((a,b)=>a+b,0):1/vals.reduce((a,b)=>a+1/b,0);
+  const ex=document.querySelector('.reqr');
+  if(ex)ex.innerHTML+=`<br>${mode==='s'?'Series':'Parallel'} (${sel.length}): <b style="color:var(--ac)">${fmtV(req,'Ω')}</b>`;
+}
+
+// ── BODE ──
+function runBode(){
+  switchTab('bode');
+  const f1=parseFloat(document.getElementById('bf1').value)||1,f2=parseFloat(document.getElementById('bf2').value)||1e5;
+  const freqs=d3.range(100).map(i=>f1*Math.pow(f2/f1,i/99));
+  const R=S.comps.filter(c=>c.type==='r').reduce((s,c)=>s+c.value,1000);
+  const Cv=S.comps.find(c=>c.type==='c')?.value||1e-6;
+  const Lv=S.comps.find(c=>c.type==='l')?.value||1e-3;
+  const hC=S.comps.some(c=>c.type==='c'),hL=S.comps.some(c=>c.type==='l');
+  let G=[],P=[],note='';
+  if(hC&&hL){const f0=1/(2*Math.PI*Math.sqrt(Lv*Cv)),Q=(1/R)*Math.sqrt(Lv/Cv);note=`RLC f₀=${fmtV(f0,'Hz')} Q=${Q.toFixed(2)}`;freqs.forEach(f=>{const w=2*Math.PI*f,w0=2*Math.PI*f0,d=Math.sqrt((1-w*w/(w0*w0))**2+(w/(Q*w0))**2),m=Math.max(1e-10,(1/Q)*(w/w0)/d);G.push(20*Math.log10(m));P.push(Math.atan2(1-w*w/(w0*w0),w/(Q*w0))*180/Math.PI);});}
+  else if(hC){const fc=1/(2*Math.PI*R*Cv);note=`RC Low-Pass fc=${fmtV(fc,'Hz')}`;freqs.forEach(f=>{const wrc=2*Math.PI*f*R*Cv;G.push(-20*Math.log10(Math.sqrt(1+wrc*wrc)));P.push(-Math.atan(wrc)*180/Math.PI);});}
+  else if(hL){const fc=R/(2*Math.PI*Lv);note=`RL Low-Pass fc=${fmtV(fc,'Hz')}`;freqs.forEach(f=>{const wl=2*Math.PI*f*Lv/R;G.push(-20*Math.log10(Math.sqrt(1+wl*wl)));P.push(-Math.atan(wl)*180/Math.PI);});}
+  else{note='Flat response (no reactive elements)';freqs.forEach(()=>{G.push(0);P.push(0);});}
+  const sv1=mkBode(freqs,G,'dB','#00e5ff'),sv2=mkBode(freqs,P,'°','#ff4d6d');
+  document.getElementById('bode-body').innerHTML=`<div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--ac4);margin-bottom:7px;line-height:1.7">${note}</div><div class="rl" style="margin-bottom:3px">GAIN (dB)</div>${sv1}<div class="rl" style="margin:5px 0 3px">PHASE (°)</div>${sv2}`;
+}
+
+function mkBode(freqs,vals,unit,col){
+  const W=224,H=80,pad={l:28,r:6,t:6,b:18};
+  const pw=W-pad.l-pad.r,ph=H-pad.t-pad.b;
+  const xs=d3.scaleLog().domain([freqs[0],freqs[freqs.length-1]]).range([0,pw]);
+  const mn=Math.min(...vals)-1,mx=Math.max(...vals)+1;
+  const ys=d3.scaleLinear().domain([mn,mx]).range([ph,0]);
+  let path='',ticks='';
+  vals.forEach((v,i)=>{const px=pad.l+xs(freqs[i]),py=pad.t+ys(v);path+=i===0?`M${px},${py}`:`L${px},${py}`;});
+  [-40,-20,0,20].forEach(tv=>{if(tv<mn||tv>mx)return;const ty=pad.t+ys(tv);ticks+=`<line x1="${pad.l}" y1="${ty}" x2="${W-pad.r}" y2="${ty}" stroke="#162230" stroke-width="1"/><text x="${pad.l-2}" y="${ty+3}" text-anchor="end" fill="#3d5468" font-size="7" font-family="Space Mono">${tv}</text>`;});
+  [10,100,1000,10000,100000].forEach(fv=>{if(fv<freqs[0]||fv>freqs[freqs.length-1])return;const tx=pad.l+xs(fv);ticks+=`<line x1="${tx}" y1="${pad.t}" x2="${tx}" y2="${H-pad.b}" stroke="#162230" stroke-width="1"/><text x="${tx}" y="${H-1}" text-anchor="middle" fill="#3d5468" font-size="7" font-family="Space Mono">${fv>=1000?fv/1000+'k':fv}</text>`;});
+  return `<svg width="${W}" height="${H}" class="wave-svg" style="width:100%">${ticks}<path d="${path}" fill="none" stroke="${col}" stroke-width="1.5"/><path d="${path}" fill="none" stroke="${col}" stroke-width="8" stroke-opacity="0.07"/></svg>`;
+}
+
+// ── DEMO ──
+function loadDemo(){
+  clearAll(true);
+  const a=(type,x,y,val,rot=0)=>{const id=`${type}_${++S.idc}`,m=META[type];const c={id,type,x,y,value:val??m.dv,freq:1000,rotation:rot,result:null};S.comps.push(c);renderComp(c);};
+  a('vs',200,260,12);a('r',320,200,4700);a('r',440,260,2200);a('c',440,340,10e-6);a('gnd',200,380,0);
+  [[200,232,200,200],[200,200,292,200],[348,200,420,200],[420,200,440,200],[440,232,440,200],[440,260,468,260],[468,260,500,260],[500,260,500,380],[200,288,200,380],[200,380,500,380],[440,312,440,368],[440,368,500,368],[440,368,440,380],[440,380,500,380]].forEach(([x1,y1,x2,y2])=>{if(x1===x2&&y1===y2)return;const id=`w_${++S.idc}`;S.wires.push({id,x1,y1,x2,y2});renderWire({id,x1,y1,x2,y2});});
+  updateDots();updateHdr();checkValidity();
+  setTimeout(solveCircuit,200);
+}
+
+function clearAll(silent=false){
+  S.comps=[];S.wires=[];S.selIds.clear();S.region.clear();S.wireStart=null;S.idc=0;S.solved=false;S.sol=null;S.drag=null;
+  ['l-comps','l-wires','l-nodes','l-flow'].forEach(id=>d3.select(`#${id}`).selectAll('*').remove());
+  wprev.style('display','none');
+  if(!silent){showInspector(null);document.getElementById('anlys-body').innerHTML='<div class="ie">// SOLVE TO<br>// SEE RESULTS</div>';setStatus('IDLE','');setVbar('NO CIRCUIT','var(--txd)','var(--txd)');updateHdr();}
+}
+
+// ── MODE ──
+function setMode(m){
+  S.mode=m;S.wireStart=null;wprev.style('display','none');
+  document.querySelectorAll('.hb,.mb').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`bm-${m}`)?.classList.add('active');
+  document.getElementById(`mb-${m}`)?.classList.add('active');
+  if(m==='pan'){enablePan();document.getElementById('cwrap').style.cursor='grab';}
+  else{disablePan();const cur={place:'crosshair',wire:'crosshair',select:'default',delete:'not-allowed',region:'crosshair'};document.getElementById('cwrap').style.cursor=cur[m]||'default';}
+}
+
+function selComp(type){S.plType=type;document.querySelectorAll('.cb').forEach(b=>b.classList.remove('active'));document.getElementById(`cbtn-${type}`)?.classList.add('active');setMode('place');}
+
+function switchTab(name){
+  document.querySelectorAll('.rt').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.rpn').forEach(p=>p.classList.remove('active'));
+  document.getElementById(`rpn-${name}`)?.classList.add('active');
+  document.querySelector(`.rt[data-tab="${name}"]`)?.classList.add('active');
+}
+
+function resetView(){svg.transition().duration(400).call(d3.zoom().transform,d3.zoomIdentity);}
+
+function setStatus(t,type){
+  document.getElementById('stxt').textContent=t;
+  const d=document.getElementById('sdot');d.className='sdot';
+  if(type)d.classList.add(type);
+  const c={vl:'var(--vl)',inv:'var(--inv)',sol:'var(--ac4)','':'var(--txd)'};
+  document.getElementById('stxt').style.color=c[type]||'var(--txd)';
+}
+
+function updateHdr(){
+  document.getElementById('hel').textContent=`${S.comps.length} EL`;
+  const pts=new Set(S.wires.flatMap(w=>[`${w.x1},${w.y1}`,`${w.x2},${w.y2}`]));
+  document.getElementById('hnd').textContent=`${pts.size} ND`;
+}
+
+// ── FORMAT ──
+function fmtV(v,u){if(v===0)return'0'+u;const a=Math.abs(v);if(a>=1e6)return(v/1e6).toPrecision(3)+'M'+u;if(a>=1e3)return(v/1e3).toPrecision(3)+'k'+u;if(a>=1)return v.toPrecision(3)+u;if(a>=1e-3)return(v*1e3).toPrecision(3)+'m'+u;if(a>=1e-6)return(v*1e6).toPrecision(3)+'μ'+u;if(a>=1e-9)return(v*1e9).toPrecision(3)+'n'+u;return v.toPrecision(3)+u;}
+function fmtN(v){if(!v&&v!==0)return'0';const a=Math.abs(v);if(a===0)return'0';if(a>=1e6)return(v/1e6).toFixed(3)+'M';if(a>=1e3)return(v/1e3).toFixed(3)+'k';if(a>=1)return v.toFixed(4);if(a>=1e-3)return(v*1e3).toFixed(3)+'m';if(a>=1e-6)return(v*1e6).toFixed(3)+'μ';return v.toExponential(3);}
+
+// D3 .attrs polyfill
+d3.selection.prototype.attrs=function(o){for(const[k,v]of Object.entries(o))this.attr(k,v);return this;};
+
+// ── KEYBOARD ──
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  const k=e.key.toLowerCase();
+  if(k==='p')setMode('place');if(k==='w')setMode('wire');if(k==='s')setMode('select');
+  if(k==='d')setMode('delete');if(k==='r')setMode('region');
+  if(k===' '){e.preventDefault();setMode('pan');}
+  if(k==='escape'){S.wireStart=null;wprev.style('display','none');}
+  if(k==='enter')solveCircuit();
+  if(k==='delete'||k==='backspace'){[...S.selIds].forEach(delComp);}
+});
+document.addEventListener('keyup',e=>{if(e.key===' '&&S.mode==='pan')setMode('place');});
+
+// Tab handlers
+document.querySelectorAll('.rt').forEach(t=>{t.onclick=function(){switchTab(this.dataset.tab);};});
+
+// ── INIT ──
+loadDemo();
+</script>
+</body>
+</html>
