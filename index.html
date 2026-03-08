@@ -262,7 +262,8 @@ svg.on('mousemove',function(e){
   }
   if(S.drag){
     const dx=raw.x-S.drag.sx,dy=raw.y-S.drag.sy;
-    S.drag.comps.forEach(dc=>{const c=S.comps.find(x=>x.id===dc.id);if(c){c.x=snap(dc.ox+dx);c.y=snap(dc.oy+dy);posComp(c);}});
+    const liveComps=new Set(S.comps);
+    S.drag.comps.forEach(dc=>{if(liveComps.has(dc.comp)){dc.comp.x=snap(dc.ox+dx);dc.comp.y=snap(dc.oy+dy);posComp(dc.comp);}});
     S.drag.wires.forEach(dw=>{const w=S.wires.find(x=>x.id===dw.id);if(w){w.x1=snap(dw.ox1+dx);w.y1=snap(dw.oy1+dy);w.x2=snap(dw.ox2+dx);w.y2=snap(dw.oy2+dy);d3.select(`#wire-${w.id}`).attrs({x1:w.x1,y1:w.y1,x2:w.x2,y2:w.y2});}});
     updateDots();checkValidity();
   }
@@ -355,7 +356,7 @@ function renderComp(comp){
       const raw=svgPt(e);
       if(!S.selIds.has(comp.id)){S.selIds.clear();S.selIds.add(comp.id);renderAllComps();showInspector(comp);}
       const selC=S.comps.filter(c=>S.selIds.has(c.id));
-      S.drag={sx:raw.x,sy:raw.y,comps:selC.map(c=>({id:c.id,ox:c.x,oy:c.y})),wires:[]};
+      S.drag={sx:raw.x,sy:raw.y,comps:selC.map(c=>({comp:c,ox:c.x,oy:c.y})),wires:[]};
     }
   })
   .on('mouseover',function(e){showTip(e,comp);})
@@ -493,12 +494,7 @@ function buildNodeMap(){
   const union=(a,b)=>{par[find(a)]=find(b);};
   ws.forEach(w=>{const ka=`${w.x1},${w.y1}`,kb=`${w.x2},${w.y2}`;find(ka);find(kb);union(ka,kb);});
   cs.forEach(c=>{
-    const tw=getWT(c);const k1=`${tw.p1.x},${tw.p1.y}`;find(k1);if(tw.p2)find(`${tw.p2.x},${tw.p2.y}`);
-    ws.forEach(w=>{
-      if(w.x1===tw.p1.x&&w.y1===tw.p1.y)union(k1,`${w.x1},${w.y1}`);
-      if(w.x2===tw.p1.x&&w.y2===tw.p1.y)union(k1,`${w.x2},${w.y2}`);
-      if(tw.p2){const k2=`${tw.p2.x},${tw.p2.y}`;if(w.x1===tw.p2.x&&w.y1===tw.p2.y)union(k2,`${w.x1},${w.y1}`);if(w.x2===tw.p2.x&&w.y2===tw.p2.y)union(k2,`${w.x2},${w.y2}`);}
-    });
+    const tw=getWT(c);find(`${tw.p1.x},${tw.p1.y}`);if(tw.p2)find(`${tw.p2.x},${tw.p2.y}`);
   });
   const can={};let cid=0;
   const allK=new Set();
@@ -602,11 +598,11 @@ function checkValidity(){
   // CHECK 4: Post-solve KCL verification
   if(S.sol&&!errs.length){
     const{res,gnd:sg}=S.sol;
-
+    const compById=new Map(S.comps.map(c=>[c.id,c]));
     // Build per-node current balance: for every element, track current into/out of each node
     const nodeBalance={}; // nodeId -> net current (positive = net in, negative = net out)
     Object.entries(res).forEach(([id,r])=>{
-      const c=S.comps.find(x=>x.id===id);if(!c)return;
+      const c=compById.get(id);if(!c)return;
       const tw=getWT(c);
       const n1=nodeOf(tw.p1.x,tw.p1.y);
       const n2=tw.p2?nodeOf(tw.p2.x,tw.p2.y):sg;
@@ -697,11 +693,11 @@ function buildNetlist(){
   const{nodeOf,N,gnd}=buildNodeMap();
   const safeGnd=gnd>=0?gnd:0;
   const els=S.comps.map(c=>{const tw=getWT(c);const n1=nodeOf(tw.p1.x,tw.p1.y);const n2=tw.p2?nodeOf(tw.p2.x,tw.p2.y):safeGnd;return{...c,n1:n1>=0?n1:safeGnd,n2:n2>=0?n2:safeGnd};});
-  return{els,N,gnd:safeGnd};
+  return{els,N,gnd:safeGnd,nodeOf};
 }
 
 function mna(nl){
-  const{els,N,gnd}=nl;
+  const{els,N,gnd,nodeOf}=nl;
   const vs=els.filter(e=>e.type==='vs'||e.type==='vac');
   const sz=N+vs.length;
   const G=Array.from({length:sz},()=>new Array(sz).fill(0));
@@ -730,7 +726,7 @@ function mna(nl){
     else if(el.type==='diode')i=vd*0.038;
     res[el.id]={v:vd,i,p:vd*i,vn1,vn2};
   });
-  return{volt,res,N,gnd,els};
+  return{volt,res,N,gnd,els,nodeOf};
 }
 
 function gauss(A,b){
@@ -767,7 +763,7 @@ function animFlow(sol){
   d3.select('#l-flow').selectAll('*').remove();
   d3.select('#l-nodes').selectAll('.node-volt').remove();
 
-  const{nodeOf}=buildNodeMap();
+  const{nodeOf}=sol;
 
   // Compute net current at each wire from node voltage difference
   // At a junction, determine which direction current is flowing using KCL:
@@ -775,6 +771,10 @@ function animFlow(sol){
 
   // Build node voltage lookup
   const nodeV=sol.volt;
+
+  // Precompute voltage range once for all wires
+  const allV=Object.values(nodeV);
+  const vRange=Math.max(...allV)-Math.min(...allV)||1;
 
   // For each wire, determine current direction from node voltages
   // Current flows conventional: from higher V to lower V through resistive path
@@ -787,8 +787,6 @@ function animFlow(sol){
     const vDiff=v1-v2; // positive = current flows x1→x2
 
     // Determine animation speed proportional to relative voltage difference
-    const allV=Object.values(nodeV);
-    const vRange=Math.max(...allV)-Math.min(...allV)||1;
     const relDiff=Math.abs(vDiff)/vRange;
     const speed=Math.max(0.3,Math.min(3,relDiff*4+0.4));
     const dur=(1/speed).toFixed(2);
@@ -830,12 +828,13 @@ function animFlow(sol){
 }
 
 function renderAnlys(sol){
-  const{volt,res,gnd}=sol;
+  const{volt,res,gnd,nodeOf}=sol;
+  const compById=new Map(S.comps.map(c=>[c.id,c]));
   let h='<div class="st">NODE VOLTAGES</div>';
   Object.entries(volt).forEach(([n,v])=>{if(parseInt(n)===gnd)return;h+=`<div class="rr"><span class="rl">N${n}</span><span class="rv v">${fmtN(v)} V</span></div>`;});
   h+='<div class="st" style="margin-top:10px">ELEMENTS</div>';
   Object.entries(res).forEach(([id,r])=>{
-    const c=S.comps.find(x=>x.id===id);if(!c)return;
+    const c=compById.get(id);if(!c)return;
     const m=META[c.type];
     h+=`<div class="rb" style="border-color:${m.color};margin-bottom:6px">
       <div style="font-family:'Space Mono',monospace;font-size:8px;color:${m.color};margin-bottom:4px;letter-spacing:1px">${id.toUpperCase()}</div>
@@ -845,10 +844,9 @@ function renderAnlys(sol){
   });
   // KCL summary table
   if(S.sol){
-    const{nodeOf}=buildNodeMap();
     const nodeBalance={};
     Object.entries(res).forEach(([id,r])=>{
-      const c=S.comps.find(x=>x.id===id);if(!c)return;
+      const c=compById.get(id);if(!c)return;
       const tw=getWT(c);
       const n1=nodeOf(tw.p1.x,tw.p1.y);
       const n2=tw.p2?nodeOf(tw.p2.x,tw.p2.y):gnd;
