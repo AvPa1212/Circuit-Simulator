@@ -247,9 +247,12 @@ const sboxEl=d3.select('#l-selbox').append('rect').attr('class','sel-box').style
 function svgPt(e){const r=document.getElementById('csv').getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;return{x:(mx-S.xf.x)/S.xf.k,y:(my-S.xf.y)/S.xf.k};}
 function svgSnap(e){const p=svgPt(e);return{x:snap(p.x),y:snap(p.y)};}
 
+// Wheel-only zoom behavior (used for initial setup and when panning is disabled)
+const wheelZoom=d3.zoom().filter(e=>e.type==='wheel').scaleExtent([0.12,5]).on('zoom',e=>{S.xf=e.transform;world.attr('transform',e.transform);updateGrid(e.transform);});
+
 // Main SVG events
 svg.on('wheel',function(e){e.preventDefault();},{passive:false});
-svg.call(d3.zoom().filter(e=>e.type==='wheel').scaleExtent([0.12,5]).on('zoom',e=>{S.xf=e.transform;world.attr('transform',e.transform);updateGrid(e.transform);}));
+svg.call(wheelZoom);
 
 svg.on('mousemove',function(e){
   const p=svgSnap(e),raw=svgPt(e);
@@ -292,7 +295,7 @@ svg.on('contextmenu',function(e){e.preventDefault();S.wireStart=null;wprev.style
 
 // Enable pan only in pan mode
 function enablePan(){svg.call(zoomBeh);}
-function disablePan(){svg.on('.zoom',null);svg.call(d3.zoom().filter(e=>e.type==='wheel').scaleExtent([0.12,5]).on('zoom',e=>{S.xf=e.transform;world.attr('transform',e.transform);updateGrid(e.transform);}));}
+function disablePan(){svg.on('.zoom',null);svg.call(wheelZoom);}
 
 // ── TERMINALS ──
 function getTerm(comp){
@@ -696,34 +699,37 @@ function buildNetlist(){
   return{els,N,gnd:safeGnd,nodeOf};
 }
 
+// DC analysis conductance approximations:
+// Capacitor → near-open in DC (very small conductance = 1e-12 S)
+// Inductor  → near-short in DC (very large conductance = 1e9 S)
+// Diode     → linearised forward-bias conductance ≈ 0.038 S (V_f ≈ 0.7V model)
+const DC_CAP_G=1e-12,DC_IND_G=1e9,DIODE_G=0.038;
+
 function mna(nl){
   const{els,N,gnd,nodeOf}=nl;
   const vs=els.filter(e=>e.type==='vs'||e.type==='vac');
   const sz=N+vs.length;
   const G=Array.from({length:sz},()=>new Array(sz).fill(0));
   const b=new Array(sz).fill(0);
+  // Map from component type to a function returning its DC conductance value
+  const condMap={r:v=>1/v,c:()=>DC_CAP_G,l:()=>DC_IND_G,diode:()=>DIODE_G};
   els.forEach(el=>{
     const{type,value,n1,n2}=el;
     const add=(r,c,v)=>{if(r>=0&&r<sz&&c>=0&&c<sz)G[r][c]+=v;};
-    if(type==='r'){const g=1/value;if(n1!==gnd){add(n1,n1,g);if(n2!==gnd)add(n1,n2,-g);}if(n2!==gnd){add(n2,n2,g);if(n1!==gnd)add(n2,n1,-g);}}
-    else if(type==='is'){if(n1!==gnd)b[n1]-=value;if(n2!==gnd)b[n2]+=value;}
-    else if(type==='c'){const g=1e-12;if(n1!==gnd){add(n1,n1,g);if(n2!==gnd)add(n1,n2,-g);}if(n2!==gnd){add(n2,n2,g);if(n1!==gnd)add(n2,n1,-g);}}
-    else if(type==='l'){const g=1e9;if(n1!==gnd){add(n1,n1,g);if(n2!==gnd)add(n1,n2,-g);}if(n2!==gnd){add(n2,n2,g);if(n1!==gnd)add(n2,n1,-g);}}
-    else if(type==='diode'){const g=0.038;if(n1!==gnd){add(n1,n1,g);if(n2!==gnd)add(n1,n2,-g);}if(n2!==gnd){add(n2,n2,g);if(n1!==gnd)add(n2,n1,-g);}}
+    const stampG=(na,nb,g)=>{if(na!==gnd){add(na,na,g);if(nb!==gnd)add(na,nb,-g);}if(nb!==gnd){add(nb,nb,g);if(na!==gnd)add(nb,na,-g);}};
+    if(type==='is'){if(n1!==gnd)b[n1]-=value;if(n2!==gnd)b[n2]+=value;}
+    else if(condMap[type])stampG(n1,n2,condMap[type](value));
   });
   let vi=0;vs.forEach(v=>{const k=N+vi,{n1,n2,value}=v;if(n1!==gnd){G[n1][k]+=1;G[k][n1]+=1;}if(n2!==gnd){G[n2][k]-=1;G[k][n2]-=1;}b[k]=value;vi++;});
   for(let j=0;j<sz;j++){G[gnd][j]=0;G[j][gnd]=0;}G[gnd][gnd]=1;b[gnd]=0;
   const x=gauss(G,b);
   const volt={};for(let i=0;i<N;i++)volt[i]=x[i]||0;
   const res={};
+  // Map from component type to a function computing branch current from voltage drop and component value
+  const currMap={r:(vd,v)=>vd/v,is:(_vd,v)=>v,c:(vd)=>vd*DC_CAP_G,l:(vd)=>vd*DC_IND_G,diode:(vd)=>vd*DIODE_G};
   els.forEach(el=>{
     const vn1=volt[el.n1]||0,vn2=volt[el.n2]||0,vd=vn1-vn2;
-    let i=0;
-    if(el.type==='r')i=vd/el.value;
-    else if(el.type==='is')i=el.value;
-    else if(el.type==='c')i=vd*1e-12;
-    else if(el.type==='l')i=vd*1e9;
-    else if(el.type==='diode')i=vd*0.038;
+    const i=currMap[el.type]?currMap[el.type](vd,el.value):0;
     res[el.id]={v:vd,i,p:vd*i,vn1,vn2};
   });
   return{volt,res,N,gnd,els,nodeOf};
@@ -781,9 +787,8 @@ function animFlow(sol){
   S.wires.forEach(w=>{
     const len=Math.hypot(w.x2-w.x1,w.y2-w.y1);if(len<5)return;
 
-    const n1=nodeOf(w.x1,w.y1),n2=nodeOf(w.x2,w.y2);
-    const v1=(n1>=0&&nodeV[n1]!==undefined)?nodeV[n1]:0;
-    const v2=(n2>=0&&nodeV[n2]!==undefined)?nodeV[n2]:0;
+    const v1=getNodeVoltage(w.x1,w.y1,nodeOf,nodeV);
+    const v2=getNodeVoltage(w.x2,w.y2,nodeOf,nodeV);
     const vDiff=v1-v2; // positive = current flows x1→x2
 
     // Determine animation speed proportional to relative voltage difference
@@ -875,15 +880,22 @@ function renderAnlys(sol){
   document.getElementById('anlys-body').innerHTML=h;
 }
 
+// ── SHARED THÉVENIN PARAMS ──
+// Computes Vth and Rth from a selected component list, optionally using solved results.
+function computeTheveninParams(sel){
+  const vsrc=sel.find(c=>['vs','vac'].includes(c.type));
+  const rs=sel.filter(c=>c.type==='r');
+  let vth=vsrc?vsrc.value:0,rth=rs.length===1?rs[0].value:rs.reduce((s,r)=>s+r.value,0);
+  if(S.sol){const r=S.sol.res;sel.forEach(c=>{if(['vs','vac'].includes(c.type)&&r[c.id])vth=Math.abs(r[c.id].v)||c.value;});}
+  return{vth,rth};
+}
+
 // ── THÉVENIN ──
 function doThevenin(){
   switchTab('anlys');
   const sel=[...S.region].map(id=>S.comps.find(c=>c.id===id)).filter(Boolean);
   if(sel.length<2){document.getElementById('anlys-body').innerHTML=`<div style="background:var(--sf2);border:1px solid var(--pu);padding:11px;font-family:'Space Mono',monospace;font-size:9px;color:var(--pu);line-height:1.8">USE ▣ REGION MODE<br>TO SELECT COMPONENTS<br>THEN CLICK THÉVENIN</div>`;return;}
-  const vsrc=sel.find(c=>['vs','vac'].includes(c.type));
-  const rs=sel.filter(c=>c.type==='r');
-  let vth=vsrc?vsrc.value:0,rth=rs.length===1?rs[0].value:rs.reduce((s,r)=>s+r.value,0);
-  if(S.sol){const r=S.sol.res;sel.forEach(c=>{if(['vs','vac'].includes(c.type)&&r[c.id])vth=Math.abs(r[c.id].v)||c.value;});}
+  const{vth,rth}=computeTheveninParams(sel);
   const isc=rth>0?vth/rth:Infinity;
   document.getElementById('anlys-body').innerHTML=`<div class="tnr">
     <div class="tnt">THÉVENIN EQUIVALENT</div>
@@ -903,9 +915,7 @@ function doNorton(){
   switchTab('anlys');
   const sel=[...S.region].map(id=>S.comps.find(c=>c.id===id)).filter(Boolean);
   if(sel.length<2){document.getElementById('anlys-body').innerHTML=`<div style="background:var(--sf2);border:1px solid var(--ac4);padding:11px;font-family:'Space Mono',monospace;font-size:9px;color:var(--ac4);line-height:1.8">USE ▣ REGION MODE<br>TO SELECT COMPONENTS<br>THEN CLICK NORTON</div>`;return;}
-  const vsrc=sel.find(c=>['vs','vac'].includes(c.type));
-  const rs=sel.filter(c=>c.type==='r');
-  let vth=vsrc?vsrc.value:0,rth=rs.length===1?rs[0].value:rs.reduce((s,r)=>s+r.value,0);
+  const{vth,rth}=computeTheveninParams(sel);
   const iN=rth>0?vth/rth:0,rN=rth,voc=iN*rN;
   document.getElementById('anlys-body').innerHTML=`<div class="tnr" style="border-color:var(--ac4)">
     <div class="tnt" style="color:var(--ac4)">NORTON EQUIVALENT</div>
@@ -1027,8 +1037,25 @@ function updateHdr(){
 }
 
 // ── FORMAT ──
-function fmtV(v,u){if(v===0)return'0'+u;const a=Math.abs(v);if(a>=1e6)return(v/1e6).toPrecision(3)+'M'+u;if(a>=1e3)return(v/1e3).toPrecision(3)+'k'+u;if(a>=1)return v.toPrecision(3)+u;if(a>=1e-3)return(v*1e3).toPrecision(3)+'m'+u;if(a>=1e-6)return(v*1e6).toPrecision(3)+'μ'+u;if(a>=1e-9)return(v*1e9).toPrecision(3)+'n'+u;return v.toPrecision(3)+u;}
-function fmtN(v){if(!v&&v!==0)return'0';const a=Math.abs(v);if(a===0)return'0';if(a>=1e6)return(v/1e6).toFixed(3)+'M';if(a>=1e3)return(v/1e3).toFixed(3)+'k';if(a>=1)return v.toFixed(4);if(a>=1e-3)return(v*1e3).toFixed(3)+'m';if(a>=1e-6)return(v*1e6).toFixed(3)+'μ';return v.toExponential(3);}
+// Shared SI-prefix scale table used by fmtV and fmtN.
+// Must be ordered from largest to smallest exponent so the first matching threshold wins.
+const SI_SCALES=[
+  {exp:1e6,pfx:'M'},{exp:1e3,pfx:'k'},{exp:1,pfx:''},{exp:1e-3,pfx:'m'},{exp:1e-6,pfx:'μ'},{exp:1e-9,pfx:'n'},
+];
+function fmtV(v,u){
+  if(v===0)return'0'+u;
+  const a=Math.abs(v);
+  for(const{exp,pfx}of SI_SCALES){if(a>=exp)return(v/exp).toPrecision(3)+pfx+u;}
+  return v.toPrecision(3)+u;
+}
+function fmtN(v){
+  if(!v&&v!==0)return'0';const a=Math.abs(v);if(a===0)return'0';
+  for(const{exp,pfx}of SI_SCALES){
+    if(pfx==='n')break; // fmtN intentionally stops at μ; sub-μ values use exponential notation
+    if(a>=exp)return pfx===''?v.toFixed(4):(v/exp).toFixed(3)+pfx;
+  }
+  return v.toExponential(3);
+}
 
 // D3 .attrs polyfill
 d3.selection.prototype.attrs=function(o){for(const[k,v]of Object.entries(o))this.attr(k,v);return this;};
