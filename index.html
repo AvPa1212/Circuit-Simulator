@@ -25,6 +25,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .sdot.vl{background:var(--vl);box-shadow:0 0 7px var(--vl);}
 .sdot.inv{background:var(--inv);box-shadow:0 0 7px var(--inv);}
 .sdot.sol{background:var(--ac4);box-shadow:0 0 7px var(--ac4);animation:blink .5s infinite;}
+.sdot.wn{background:var(--wn);box-shadow:0 0 7px var(--wn);}
 .main{display:flex;flex:1;overflow:hidden;}
 .lp{width:185px;background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;z-index:10;}
 .ps{padding:9px;border-bottom:1px solid var(--bd);}
@@ -110,6 +111,8 @@ input[type=number]::-webkit-inner-spin-button{opacity:0.3;}
     <button class="hb" id="bm-delete" onclick="setMode('delete')">✕ DELETE</button>
     <button class="hb" id="bm-region" onclick="setMode('region')">▣ REGION</button>
     <button class="hb solve" onclick="solveCircuit()">⚡ SOLVE</button>
+    <button class="hb" onclick="exportJSON()" title="Ctrl+S">⬇ SAVE</button>
+    <button class="hb" onclick="importJSON()" title="">⬆ LOAD</button>
     <button class="hb clr" onclick="clearAll()">⌫ CLEAR</button>
   </div>
   <div class="spill">
@@ -119,6 +122,8 @@ input[type=number]::-webkit-inner-spin-button{opacity:0.3;}
     <span id="hel" style="color:var(--txm)">0 EL</span>
     <span style="color:var(--bd2)">|</span>
     <span id="hnd" style="color:var(--txm)">0 ND</span>
+    <span style="color:var(--bd2)">|</span>
+    <span id="zoom-pct" style="color:var(--txm)">100%</span>
   </div>
 </header>
 <div class="main">
@@ -167,11 +172,17 @@ input[type=number]::-webkit-inner-spin-button{opacity:0.3;}
       <button class="mb" id="mb-region" onclick="setMode('region')">▣ REGION [R]</button>
       <hr style="border:none;border-top:1px solid var(--bd);margin:7px 0">
       <div class="st">Actions</div>
-      <button class="ab p" onclick="solveCircuit()">⚡ SOLVE CIRCUIT</button>
+      <button class="ab p" onclick="solveCircuit()">⚡ SOLVE CIRCUIT [Enter]</button>
+      <button class="ab" onclick="undo()" title="Ctrl+Z">↩ UNDO [Ctrl+Z]</button>
+      <button class="ab" onclick="redo()" title="Ctrl+Shift+Z">↪ REDO [Ctrl+⇧Z]</button>
+      <button class="ab" onclick="dupSelected()" title="Ctrl+D">⧉ DUPLICATE [Ctrl+D]</button>
       <button class="ab" onclick="runBode()">∿ BODE SWEEP</button>
       <button class="ab tv" onclick="doThevenin()">⊡ THÉVENIN</button>
       <button class="ab no" onclick="doNorton()">⊠ NORTON</button>
       <button class="ab" onclick="computeReq()">Ω REQ CALC</button>
+      <hr style="border:none;border-top:1px solid var(--bd);margin:7px 0">
+      <button class="ab" onclick="exportJSON()" title="Ctrl+S">⬇ SAVE JSON [Ctrl+S]</button>
+      <button class="ab" onclick="importJSON()">⬆ LOAD JSON</button>
       <hr style="border:none;border-top:1px solid var(--bd);margin:7px 0">
       <button class="ab" onclick="resetView()">⌖ RESET VIEW</button>
       <button class="ab dn" onclick="clearAll()">✕ CLEAR ALL</button>
@@ -238,7 +249,7 @@ const S={comps:[],wires:[],mode:'place',plType:'vs',selIds:new Set(),wireStart:n
 const svg=d3.select('#csv'),world=d3.select('#world');
 const zoomBeh=d3.zoom().scaleExtent([0.12,5]).on('zoom',e=>{S.xf=e.transform;world.attr('transform',e.transform);updateGrid(e.transform);});
 
-function updateGrid(t){const gs=GRID*t.k,ox=t.x%gs,oy=t.y%gs;d3.select('#csv').style('background-size',`${gs}px ${gs}px`).style('background-position',`${ox}px ${oy}px`);}
+function updateGrid(t){const gs=GRID*t.k,ox=t.x%gs,oy=t.y%gs;d3.select('#csv').style('background-size',`${gs}px ${gs}px`).style('background-position',`${ox}px ${oy}px`);updateZoom(t);}
 
 // Wire preview & sel box
 const wprev=world.append('line').attr('stroke','#00e5ff').attr('stroke-width',1.5).attr('stroke-dasharray','6,4').attr('pointer-events','none').style('display','none');
@@ -256,7 +267,12 @@ svg.call(wheelZoom);
 
 svg.on('mousemove',function(e){
   const p=svgSnap(e),raw=svgPt(e);
-  if(S.mode==='wire'&&S.wireStart)wprev.style('display',null).attrs({x1:S.wireStart.x,y1:S.wireStart.y,x2:p.x,y2:p.y});
+  if(S.mode==='place'){showGhost(S.plType,p.x,p.y);}
+  else{hideGhost();}
+  if(S.mode==='wire'){
+    const wp=svgSnapWire(e);
+    if(S.wireStart)wprev.style('display',null).attrs({x1:S.wireStart.x,y1:S.wireStart.y,x2:wp.x,y2:wp.y});
+  }
   if(S.mode==='region'&&S.selBox){
     const bx=Math.min(S.selBox.sx,raw.x),by=Math.min(S.selBox.sy,raw.y),bw=Math.abs(raw.x-S.selBox.sx),bh=Math.abs(raw.y-S.selBox.sy);
     sboxEl.style('display',null).attrs({x:bx,y:by,width:bw,height:bh});
@@ -276,8 +292,8 @@ svg.on('mousemove',function(e){
 svg.on('mousedown',function(e){
   if(e.button!==0||S.mode==='pan')return;
   const p=svgSnap(e),raw=svgPt(e);
-  if(S.mode==='place'){e.stopPropagation();placeComp(S.plType,p.x,p.y);}
-  else if(S.mode==='wire'){e.stopPropagation();if(!S.wireStart)S.wireStart={x:p.x,y:p.y};else{addWire(S.wireStart.x,S.wireStart.y,p.x,p.y);S.wireStart={x:p.x,y:p.y};wprev.style('display','none');}}
+  if(S.mode==='place'){e.stopPropagation();hideGhost();placeComp(S.plType,p.x,p.y);}
+  else if(S.mode==='wire'){e.stopPropagation();const wp=svgSnapWire(e);if(!S.wireStart)S.wireStart={x:wp.x,y:wp.y};else{addWire(S.wireStart.x,S.wireStart.y,wp.x,wp.y);S.wireStart={x:wp.x,y:wp.y};wprev.style('display','none');}}
   else if(S.mode==='region'){S.selBox={sx:raw.x,sy:raw.y,ex:raw.x,ey:raw.y};S.region.clear();}
   else if(S.mode==='select'){S.selIds.clear();renderAllComps();showInspector(null);}
 });
@@ -291,6 +307,7 @@ svg.on('mouseup',function(e){
   if(S.drag){S.drag=null;checkValidity();}
 });
 
+svg.on('mouseleave',function(){hideGhost();});
 svg.on('contextmenu',function(e){e.preventDefault();S.wireStart=null;wprev.style('display','none');});
 
 // Enable pan only in pan mode
@@ -311,6 +328,7 @@ function getTerm(comp){
 
 // ── PLACE ──
 function placeComp(type,x,y){
+  saveState();
   const id=`${type}_${++S.idc}`;
   const m=META[type];
   const c={id,type,x,y,value:m.dv,freq:1000,rotation:0,result:null};
@@ -359,6 +377,7 @@ function renderComp(comp){
       const raw=svgPt(e);
       if(!S.selIds.has(comp.id)){S.selIds.clear();S.selIds.add(comp.id);renderAllComps();showInspector(comp);}
       const selC=S.comps.filter(c=>S.selIds.has(c.id));
+      saveState();
       S.drag={sx:raw.x,sy:raw.y,comps:selC.map(c=>({comp:c,ox:c.x,oy:c.y})),wires:[]};
     }
   })
@@ -418,6 +437,7 @@ function renderAllComps(){S.comps.forEach(c=>{d3.select(`#cg-${c.id}`).classed('
 // ── WIRES ──
 function addWire(x1,y1,x2,y2){
   if(x1===x2&&y1===y2)return;
+  saveState();
   const id=`w_${++S.idc}`,wire={id,x1,y1,x2,y2};
   S.wires.push(wire);renderWire(wire);updateDots();updateHdr();checkValidity();
 }
@@ -425,7 +445,7 @@ function renderWire(w){
   d3.select(`#wire-${w.id}`).remove();
   d3.select('#l-wires').append('line').attr('id',`wire-${w.id}`).attr('class','wl')
     .attrs({x1:w.x1,y1:w.y1,x2:w.x2,y2:w.y2,stroke:'#162230','stroke-width':2,'stroke-linecap':'round'})
-    .on('click',function(e){e.stopPropagation();if(S.mode==='delete'){S.wires=S.wires.filter(x=>x.id!==w.id);d3.select(`#wire-${w.id}`).remove();updateDots();updateHdr();checkValidity();}})
+    .on('click',function(e){e.stopPropagation();if(S.mode==='delete'){saveState();S.wires=S.wires.filter(x=>x.id!==w.id);d3.select(`#wire-${w.id}`).remove();updateDots();updateHdr();checkValidity();}})
     .on('mouseover',function(){if(S.mode==='delete')d3.select(this).attr('stroke','var(--inv)');})
     .on('mouseout',function(){d3.select(this).attr('stroke','#162230');});
 }
@@ -666,7 +686,7 @@ function checkValidity(){
     setStatus('INVALID','inv');
   }else if(warns.length){
     setVbar(`⚠ ${warns[0]}`,'var(--wn)','var(--wn)');
-    setStatus('WARNING','inv');
+    setStatus('WARNING','wn');
   }else{
     const msg=S.solved?'✓ SOLVED — KCL VERIFIED':'✓ VALID — PRESS SOLVE OR ENTER';
     setVbar(msg,'var(--vl)','var(--vl)');
@@ -753,10 +773,11 @@ function solveCircuit(){
     renderAnlys(sol);
     const{errs,warns}=checkValidity(); // run KCL check first
     animFlow(sol);
+    updateWireColors();
     if(errs.length){
       setStatus('ERRORS','inv');
     }else if(warns.length){
-      setStatus('WARNINGS','inv');
+      setStatus('WARNINGS','wn');
     }else{
       setStatus('SOLVED ✓','vl');
     }
@@ -996,14 +1017,16 @@ function loadDemo(){
 
 function clearAll(silent=false){
   S.comps=[];S.wires=[];S.selIds.clear();S.region.clear();S.wireStart=null;S.idc=0;S.solved=false;S.sol=null;S.drag=null;
+  _undoStack.length=0;_redoStack.length=0;
   ['l-comps','l-wires','l-nodes','l-flow'].forEach(id=>d3.select(`#${id}`).selectAll('*').remove());
-  wprev.style('display','none');
+  wprev.style('display','none');hideGhost();
   if(!silent){showInspector(null);document.getElementById('anlys-body').innerHTML='<div class="ie">// SOLVE TO<br>// SEE RESULTS</div>';setStatus('IDLE','');setVbar('NO CIRCUIT','var(--txd)','var(--txd)');updateHdr();}
 }
 
 // ── MODE ──
 function setMode(m){
   S.mode=m;S.wireStart=null;wprev.style('display','none');
+  if(m!=='place')hideGhost();
   document.querySelectorAll('.hb,.mb').forEach(b=>b.classList.remove('active'));
   document.getElementById(`bm-${m}`)?.classList.add('active');
   document.getElementById(`mb-${m}`)?.classList.add('active');
@@ -1020,13 +1043,13 @@ function switchTab(name){
   document.querySelector(`.rt[data-tab="${name}"]`)?.classList.add('active');
 }
 
-function resetView(){svg.transition().duration(400).call(d3.zoom().transform,d3.zoomIdentity);}
+function resetView(){S.xf={x:0,y:0,k:1};svg.transition().duration(400).call(wheelZoom.transform,d3.zoomIdentity);}
 
 function setStatus(t,type){
   document.getElementById('stxt').textContent=t;
   const d=document.getElementById('sdot');d.className='sdot';
   if(type)d.classList.add(type);
-  const c={vl:'var(--vl)',inv:'var(--inv)',sol:'var(--ac4)','':'var(--txd)'};
+  const c={vl:'var(--vl)',inv:'var(--inv)',sol:'var(--ac4)',wn:'var(--wn)','':'var(--txd)'};
   document.getElementById('stxt').style.color=c[type]||'var(--txd)';
 }
 
@@ -1060,18 +1083,130 @@ function fmtN(v){
 // D3 .attrs polyfill
 d3.selection.prototype.attrs=function(o){for(const[k,v]of Object.entries(o))this.attr(k,v);return this;};
 
+// ── UNDO / REDO ──
+const _undoStack=[],_redoStack=[];
+function saveState(){
+  _undoStack.push(JSON.stringify({comps:S.comps.map(c=>({...c,result:null})),wires:S.wires.map(w=>({...w})),idc:S.idc}));
+  if(_undoStack.length>50)_undoStack.shift();
+  _redoStack.length=0;
+}
+function _restoreState(st){
+  S.comps=st.comps;S.wires=st.wires;S.idc=st.idc;
+  S.solved=false;S.sol=null;S.selIds.clear();S.region.clear();S.drag=null;
+  ['l-comps','l-wires','l-nodes','l-flow','l-errs'].forEach(id=>d3.select(`#${id}`).selectAll('*').remove());
+  S.comps.forEach(c=>renderComp(c));
+  S.wires.forEach(w=>renderWire(w));
+  updateDots();updateHdr();checkValidity();showInspector(null);
+}
+function undo(){if(!_undoStack.length)return;_redoStack.push(JSON.stringify({comps:S.comps.map(c=>({...c,result:null})),wires:S.wires.map(w=>({...w})),idc:S.idc}));_restoreState(JSON.parse(_undoStack.pop()));}
+function redo(){if(!_redoStack.length)return;_undoStack.push(JSON.stringify({comps:S.comps.map(c=>({...c,result:null})),wires:S.wires.map(w=>({...w})),idc:S.idc}));_restoreState(JSON.parse(_redoStack.pop()));}
+
+// ── SAVE / LOAD ──
+function exportJSON(){
+  const data=JSON.stringify({comps:S.comps.map(c=>({...c,result:null})),wires:S.wires,idc:S.idc},null,2);
+  const a=document.createElement('a');
+  a.href='data:application/json,'+encodeURIComponent(data);
+  a.download='circuit.json';a.click();
+  setStatus('SAVED ✓','vl');
+}
+function importJSON(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const st=JSON.parse(ev.target.result);
+        if(!Array.isArray(st.comps)||!Array.isArray(st.wires))throw new Error('invalid');
+        saveState();clearAll(true);
+        S.comps=st.comps.map(c=>({...c,result:null}));S.wires=st.wires;S.idc=st.idc||0;
+        S.comps.forEach(c=>renderComp(c));S.wires.forEach(w=>renderWire(w));
+        updateDots();updateHdr();checkValidity();showInspector(null);setStatus('LOADED ✓','vl');
+      }catch(err){alert('Invalid circuit file. Please select a valid JSON circuit.');}
+    };
+    reader.readAsText(f);
+  };
+  inp.click();
+}
+
+// ── DUPLICATE ──
+function dupSelected(){
+  if(!S.selIds.size)return;
+  saveState();
+  const newIds=[];
+  S.selIds.forEach(id=>{
+    const c=S.comps.find(x=>x.id===id);if(!c)return;
+    const nc={...c,id:`${c.type}_${++S.idc}`,x:c.x+GRID*2,y:c.y+GRID*2,result:null};
+    S.comps.push(nc);renderComp(nc);newIds.push(nc.id);
+  });
+  S.selIds=new Set(newIds);renderAllComps();updateHdr();checkValidity();
+}
+
+// ── TERMINAL SNAP (wire mode) ──
+// Returns exact terminal coords if cursor is within GRID distance of any terminal or wire endpoint
+function snapTerminal(gx,gy){
+  const thr=GRID*1.2;
+  for(const c of S.comps){
+    const tw=getWT(c);
+    for(const pt of [tw.p1,tw.p2].filter(Boolean)){
+      if(Math.abs(pt.x-gx)<=thr&&Math.abs(pt.y-gy)<=thr)return{x:pt.x,y:pt.y};
+    }
+  }
+  for(const w of S.wires){
+    for(const pt of [{x:w.x1,y:w.y1},{x:w.x2,y:w.y2}]){
+      if(Math.abs(pt.x-gx)<=thr/2&&Math.abs(pt.y-gy)<=thr/2)return pt;
+    }
+  }
+  return{x:gx,y:gy};
+}
+function svgSnapWire(e){const p=svgSnap(e);return snapTerminal(p.x,p.y);}
+
+// ── GHOST PLACEMENT PREVIEW ──
+const ghostG=world.append('g').attr('id','ghost-comp').attr('pointer-events','none').style('display','none').style('opacity',0.38);
+function showGhost(type,x,y){
+  ghostG.style('display',null).attr('transform',`translate(${x},${y})`);
+  ghostG.selectAll('*').remove();
+  drawShape(ghostG,{id:'_ghost',type,x:0,y:0,value:META[type].dv,rotation:0,result:null});
+}
+function hideGhost(){ghostG.style('display','none');}
+
+// ── ZOOM INDICATOR ──
+function updateZoom(t){
+  const el=document.getElementById('zoom-pct');
+  if(el)el.textContent=`${Math.round((t.k||1)*100)}%`;
+}
+
+// ── WIRE VOLTAGE COLORING ──
+function updateWireColors(){
+  if(!S.sol)return;
+  const allV=Object.values(S.sol.volt);
+  const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin||1;
+  const cScale=d3.scaleLinear().domain([0,0.5,1]).range(['#162230','#00b8d4','#00e5ff']);
+  S.wires.forEach(w=>{
+    const v1=getNodeVoltage(w.x1,w.y1,S.sol.nodeOf,S.sol.volt);
+    const v2=getNodeVoltage(w.x2,w.y2,S.sol.nodeOf,S.sol.volt);
+    const t=((v1+v2)/2-vMin)/vRange;
+    d3.select(`#wire-${w.id}`).attr('stroke',cScale(Math.max(0,Math.min(1,t)))).attr('stroke-width',2.5);
+  });
+}
+
 // ── KEYBOARD ──
+let _prevMode='place';
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT')return;
   const k=e.key.toLowerCase();
-  if(k==='p')setMode('place');if(k==='w')setMode('wire');if(k==='s')setMode('select');
-  if(k==='d')setMode('delete');if(k==='r')setMode('region');
-  if(k===' '){e.preventDefault();setMode('pan');}
-  if(k==='escape'){S.wireStart=null;wprev.style('display','none');}
+  if(k==='p')setMode('place');if(k==='w')setMode('wire');if(k==='s'&&!(e.ctrlKey||e.metaKey))setMode('select');
+  if(k==='d'&&!(e.ctrlKey||e.metaKey))setMode('delete');if(k==='r')setMode('region');
+  if(k===' '){e.preventDefault();if(S.mode!=='pan')_prevMode=S.mode;setMode('pan');}
+  if(k==='escape'){S.wireStart=null;wprev.style('display','none');hideGhost();}
   if(k==='enter')solveCircuit();
-  if(k==='delete'||k==='backspace'){[...S.selIds].forEach(delComp);}
+  if(k==='delete'||k==='backspace'){if(S.selIds.size){saveState();[...S.selIds].forEach(delComp);}}
+  if(k==='z'&&(e.ctrlKey||e.metaKey)){e.preventDefault();if(e.shiftKey)redo();else undo();}
+  if(k==='d'&&(e.ctrlKey||e.metaKey)){e.preventDefault();dupSelected();}
+  if(k==='q'&&S.selIds.size===1){const id=[...S.selIds][0];const c=S.comps.find(x=>x.id===id);if(c){saveState();c.rotation=(c.rotation+45)%360;posComp(c);updateDots();checkValidity();}}
+  if(k==='s'&&(e.ctrlKey||e.metaKey)){e.preventDefault();exportJSON();}
 });
-document.addEventListener('keyup',e=>{if(e.key===' '&&S.mode==='pan')setMode('place');});
+document.addEventListener('keyup',e=>{if(e.key===' '&&S.mode==='pan')setMode(_prevMode);});
 
 // Tab handlers
 document.querySelectorAll('.rt').forEach(t=>{t.onclick=function(){switchTab(this.dataset.tab);};});
