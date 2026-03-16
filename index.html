@@ -112,7 +112,7 @@ input[type=number]::-webkit-inner-spin-button{opacity:0.3;}
     <button class="hb" id="bm-region" onclick="setMode('region')">▣ REGION</button>
     <button class="hb solve" onclick="solveCircuit()">⚡ SOLVE</button>
     <button class="hb" onclick="exportJSON()" title="Ctrl+S">⬇ SAVE</button>
-    <button class="hb" onclick="importJSON()" title="">⬆ LOAD</button>
+    <button class="hb" onclick="importJSON()" title="Open a saved circuit JSON file">⬆ LOAD</button>
     <button class="hb clr" onclick="clearAll()">⌫ CLEAR</button>
   </div>
   <div class="spill">
@@ -1043,7 +1043,11 @@ function switchTab(name){
   document.querySelector(`.rt[data-tab="${name}"]`)?.classList.add('active');
 }
 
-function resetView(){S.xf={x:0,y:0,k:1};svg.transition().duration(400).call(wheelZoom.transform,d3.zoomIdentity);}
+function resetView(){
+  S.xf={x:0,y:0,k:1};
+  const activeZoom=S.mode==='pan'?zoomBeh:wheelZoom;
+  svg.transition().duration(400).call(activeZoom.transform,d3.zoomIdentity);
+}
 
 function setStatus(t,type){
   document.getElementById('stxt').textContent=t;
@@ -1084,10 +1088,11 @@ function fmtN(v){
 d3.selection.prototype.attrs=function(o){for(const[k,v]of Object.entries(o))this.attr(k,v);return this;};
 
 // ── UNDO / REDO ──
+const MAX_UNDO=50;
 const _undoStack=[],_redoStack=[];
 function saveState(){
   _undoStack.push(JSON.stringify({comps:S.comps.map(c=>({...c,result:null})),wires:S.wires.map(w=>({...w})),idc:S.idc}));
-  if(_undoStack.length>50)_undoStack.shift();
+  if(_undoStack.length>MAX_UNDO)_undoStack.shift();
   _redoStack.length=0;
 }
 function _restoreState(st){
@@ -1122,7 +1127,7 @@ function importJSON(){
         S.comps=st.comps.map(c=>({...c,result:null}));S.wires=st.wires;S.idc=st.idc||0;
         S.comps.forEach(c=>renderComp(c));S.wires.forEach(w=>renderWire(w));
         updateDots();updateHdr();checkValidity();showInspector(null);setStatus('LOADED ✓','vl');
-      }catch(err){alert('Invalid circuit file. Please select a valid JSON circuit.');}
+      }catch(err){alert('Invalid circuit file: '+err.message);}
     };
     reader.readAsText(f);
   };
@@ -1136,6 +1141,7 @@ function dupSelected(){
   const newIds=[];
   S.selIds.forEach(id=>{
     const c=S.comps.find(x=>x.id===id);if(!c)return;
+    // Offset by 2 grid cells to place duplicate near but not on top of original
     const nc={...c,id:`${c.type}_${++S.idc}`,x:c.x+GRID*2,y:c.y+GRID*2,result:null};
     S.comps.push(nc);renderComp(nc);newIds.push(nc.id);
   });
@@ -1143,7 +1149,8 @@ function dupSelected(){
 }
 
 // ── TERMINAL SNAP (wire mode) ──
-// Returns exact terminal coords if cursor is within GRID distance of any terminal or wire endpoint
+// Returns exact terminal coords if cursor is within 1.2x GRID distance of any terminal.
+// Wire endpoints use a tighter 0.5x GRID snap to avoid false matches with nearby terminals.
 function snapTerminal(gx,gy){
   const thr=GRID*1.2;
   for(const c of S.comps){
@@ -1154,6 +1161,7 @@ function snapTerminal(gx,gy){
   }
   for(const w of S.wires){
     for(const pt of [{x:w.x1,y:w.y1},{x:w.x2,y:w.y2}]){
+      // Tighter threshold for wire endpoints to prevent false snaps to nearby wires
       if(Math.abs(pt.x-gx)<=thr/2&&Math.abs(pt.y-gy)<=thr/2)return pt;
     }
   }
@@ -1162,7 +1170,7 @@ function snapTerminal(gx,gy){
 function svgSnapWire(e){const p=svgSnap(e);return snapTerminal(p.x,p.y);}
 
 // ── GHOST PLACEMENT PREVIEW ──
-const ghostG=world.append('g').attr('id','ghost-comp').attr('pointer-events','none').style('display','none').style('opacity',0.38);
+const ghostG=world.append('g').attr('id','ghost-comp').attr('pointer-events','none').style('display','none').style('opacity',0.38); // 0.38 = semi-transparent preview
 function showGhost(type,x,y){
   ghostG.style('display',null).attr('transform',`translate(${x},${y})`);
   ghostG.selectAll('*').remove();
